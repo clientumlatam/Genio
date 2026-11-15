@@ -90,6 +90,8 @@ import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polygon
+import org.osmdroid.views.overlay.ScaleBarOverlay
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 
@@ -195,7 +197,14 @@ fun DirectoryMapCanvas(
   var mapViewRef by remember { mutableStateOf<MapView?>(null) }
   val iconCache = remember { mutableMapOf<Int, Drawable>() }
 
-  val initialZoom = if (selectedLocality.id == "neuquen_capital") 13.0 else 13.8
+  val initialZoom = if (selectedLocality.id == "neuquen_capital") 13.5 else 13.8
+  val initialCenterMarkerTitle =
+    if (selectedLocality.id == "neuquen_capital") {
+      stringResource(R.string.map_initial_marker_title)
+    } else {
+      selectedLocality.name
+    }
+  val initialCenterMarkerSnippet = stringResource(R.string.map_initial_marker_snippet)
 
   val baseBusinesses =
     when (resultsState) {
@@ -216,7 +225,7 @@ fun DirectoryMapCanvas(
       pinnedBusiness = null
       hasMovedMap = false
       suppressMoveUntilMs = System.currentTimeMillis() + 900L
-      val targetZoom = if (selectedLocality.id == "neuquen_capital") 13.0 else 13.8
+      val targetZoom = if (selectedLocality.id == "neuquen_capital") 13.5 else 13.8
       mapViewRef?.controller?.apply {
         setZoom(targetZoom)
         animateTo(selectedLocality.latLng.toOsmGeoPoint())
@@ -258,6 +267,7 @@ fun DirectoryMapCanvas(
       modifier = Modifier.fillMaxSize().testTag("osm_map_canvas"),
       factory = { ctx ->
         MapView(ctx).apply {
+          // Capa base de mapa OpenStreetMap (MAPNIK) centrada en Neuquén
           setTileSource(TileSourceFactory.MAPNIK)
           setMultiTouchControls(true)
           zoomController.setVisibility(
@@ -266,6 +276,12 @@ fun DirectoryMapCanvas(
           )
           controller.setZoom(initialZoom)
           controller.setCenter(selectedLocality.latLng.toOsmGeoPoint())
+
+          val scaleBarOverlay = ScaleBarOverlay(this).apply {
+            setAlignBottom(true)
+            setAlignRight(true)
+          }
+          overlays.add(scaleBarOverlay)
 
           if (hasLocationPermission) {
             val locationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(ctx), this)
@@ -308,8 +324,31 @@ fun DirectoryMapCanvas(
         }
       },
       update = { mapView ->
-        // Preserve non-Marker overlays (MyLocation & MapEvents) and refresh business Markers
-        mapView.overlays.removeAll { it is Marker }
+        // Preservar capas base (ScaleBar, MyLocation, MapEvents) y actualizar radio, marcador inicial y comercios
+        mapView.overlays.removeAll { it is Marker || it is Polygon }
+
+        val centerPoint = selectedLocality.latLng.toOsmGeoPoint()
+        val nearbyZoneOverlay =
+          Polygon(mapView).apply {
+            points = Polygon.pointsAsCircle(centerPoint, selectedLocality.radiusMeters.coerceAtMost(5000.0))
+            fillPaint.color = android.graphics.Color.argb(22, 21, 70, 166)
+            outlinePaint.color = android.graphics.Color.argb(110, 21, 70, 166)
+            outlinePaint.strokeWidth = 2.5f
+          }
+        mapView.overlays.add(nearbyZoneOverlay)
+
+        // Marcador inicial centrado en Neuquén / localidad activa para referencia de comercios cercanos
+        val initialCenterMarker =
+          Marker(mapView).apply {
+            id = "initial_neuquen_marker"
+            position = centerPoint
+            title = initialCenterMarkerTitle
+            snippet = initialCenterMarkerSnippet
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            icon = createAnchorCenterPinDrawable(mapView.context)
+          }
+        mapView.overlays.add(initialCenterMarker)
+
         businesses.forEach { business ->
           val marker =
             Marker(mapView).apply {
@@ -337,6 +376,28 @@ fun DirectoryMapCanvas(
         mapView.invalidate()
       },
     )
+
+    if (!isCompactPreview) {
+      Card(
+        shape = RoundedCornerShape(50),
+        colors =
+          CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+          ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier =
+          Modifier.align(Alignment.TopStart)
+            .padding(start = 12.dp, top = 12.dp)
+            .testTag("map_base_layer_badge"),
+      ) {
+        Text(
+          text = stringResource(R.string.map_base_layer_label),
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+      }
+    }
 
     AnimatedVisibility(
       visible = hasMovedMap,
@@ -557,6 +618,49 @@ internal fun createCategoryPinDrawable(context: Context, colorArgb: Int): Drawab
       color = android.graphics.Color.WHITE
     }
   canvas.drawCircle(cx, cy, radius * 0.36f, centerDotPaint)
+
+  return BitmapDrawable(context.resources, bitmap)
+}
+
+internal fun createAnchorCenterPinDrawable(context: Context): Drawable {
+  val density = context.resources.displayMetrics.density
+  val width = (36f * density).toInt().coerceAtLeast(36)
+  val height = (46f * density).toInt().coerceAtLeast(46)
+  val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+  val canvas = Canvas(bitmap)
+
+  val cx = width / 2f
+  val radius = width * 0.38f
+  val cy = radius + 2f * density
+
+  val fillPaint =
+    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      style = Paint.Style.FILL
+      color = android.graphics.Color.rgb(21, 70, 166)
+    }
+  val ringPaint =
+    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      style = Paint.Style.STROKE
+      strokeWidth = 2.5f * density
+      color = android.graphics.Color.WHITE
+    }
+  val goldPaint =
+    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      style = Paint.Style.FILL
+      color = android.graphics.Color.rgb(245, 158, 11)
+    }
+
+  val pinPath =
+    Path().apply {
+      addCircle(cx, cy, radius, Path.Direction.CW)
+      moveTo(cx - radius * 0.70f, cy + radius * 0.55f)
+      lineTo(cx, height - 2f * density)
+      lineTo(cx + radius * 0.70f, cy + radius * 0.55f)
+      close()
+    }
+  canvas.drawPath(pinPath, fillPaint)
+  canvas.drawCircle(cx, cy, radius, ringPaint)
+  canvas.drawCircle(cx, cy, radius * 0.42f, goldPaint)
 
   return BitmapDrawable(context.resources, bitmap)
 }

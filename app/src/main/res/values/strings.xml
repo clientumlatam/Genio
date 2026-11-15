@@ -6,6 +6,7 @@
     <string name="nav_map">Mapa</string>
     <string name="nav_categories">Rubros</string>
     <string name="nav_my_businesses">Mis Comercios</string>
+    <string name="nav_ai_assistant">Genio IA</string>
 
     <string name="search_placeholder">Buscar comercio o rubro…</string>
     <string name="autocomplete_categories_title">Rubros sugeridos</string>
@@ -53,11 +54,26 @@
     <string name="my_businesses_subtitle">Publicá tu negocio o servicio profesional y mostralo en el mapa del Alto Valle.</string>
     <string name="my_businesses_empty_title">Todavía no publicaste comercios</string>
     <string name="my_businesses_empty_body">Tocá el botón + para cargar tu primer comercio, rubro, WhatsApp y pin en el mapa.</string>
-    <string name="local_storage_notice">Tus comercios se guardan en el dispositivo (la sincronización en la nube requiere habilitar permisos de Firebase).</string>
+    <string name="local_storage_notice">Tus comercios se guardan en el dispositivo y quedan asociados a tu perfil de dueño autenticado.</string>
+
+    <string name="auth_owner_gate_title">Acceso para Dueños de Comercios</string>
+    <string name="auth_owner_gate_subtitle">Iniciá sesión con Google mediante Credential Manager para gestionar tu perfil comercial, publicar locales y actualizar tus horarios en Neuquén y el Alto Valle.</string>
+    <string name="auth_sign_in_google">Continuar con Google</string>
+    <string name="auth_sign_out">Cerrar sesión</string>
+    <string name="auth_edit_profile">Editar perfil</string>
+    <string name="auth_profile_title">Perfil de dueño de comercio</string>
+    <string name="auth_profile_name_label">Nombre público o razón social</string>
+    <string name="auth_profile_save">Guardar perfil</string>
+    <string name="auth_firebase_pending_notice">Para completar el inicio de sesión en vivo con Google, agregá el archivo google-services.json de tu proyecto Firebase en app/.</string>
+
+    <string name="map_base_layer_label">Capa base: OpenStreetMap</string>
+    <string name="map_initial_marker_title">Neuquén Capital</string>
+    <string name="map_initial_marker_snippet">Centro de referencia para comercios cercanos</string>
 
     <string name="cd_app_logo">Emblema de Guía Genio</string>
     <string name="cd_hero_banner">Paisaje editorial de Neuquén, Alto Valle y Vaca Muerta</string>
     <string name="cd_business_photo">Foto del comercio</string>
     <string name="cd_favorite_toggle">Guardar en favoritos</string>
     <string name="cd_clear_search">Limpiar búsqueda</string>
+    <string name="cd_owner_avatar">Foto de perfil del dueño</string>
 </resources>

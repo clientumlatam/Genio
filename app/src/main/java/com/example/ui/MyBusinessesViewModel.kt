@@ -1,8 +1,11 @@
 package com.example.ui
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.data.auth.AuthService
+import com.example.data.auth.AuthUiState
 import com.example.data.local.PublishedBusinessEntity
 import com.example.data.local.PublishedBusinessRepository
 import com.example.data.places.PlacesRepository
@@ -40,7 +43,11 @@ data class BusinessFormState(
 class MyBusinessesViewModel(
   private val repository: PublishedBusinessRepository,
   private val placesRepository: PlacesRepository? = null,
+  private val authService: AuthService? = null,
 ) : ViewModel() {
+
+  val authState: StateFlow<AuthUiState> =
+    authService?.authState ?: MutableStateFlow(AuthUiState()).asStateFlow()
 
   val publishedBusinesses: StateFlow<List<PublishedBusinessEntity>> =
     repository.publishedBusinesses.stateIn(
@@ -54,6 +61,30 @@ class MyBusinessesViewModel(
 
   private val _feedbackMessage = MutableStateFlow<String?>(null)
   val feedbackMessage: StateFlow<String?> = _feedbackMessage.asStateFlow()
+
+  fun signInWithGoogle(activityContext: Context) {
+    val service = authService ?: return
+    viewModelScope.launch { service.signInWithGoogle(activityContext) }
+  }
+
+  fun updateOwnerProfile(displayName: String, preferredLocalityId: String) {
+    val service = authService ?: return
+    viewModelScope.launch {
+      val ok = service.updateOwnerProfile(displayName, preferredLocalityId)
+      if (ok) {
+        _feedbackMessage.value = "Perfil de dueño actualizado"
+      }
+    }
+  }
+
+  fun signOut() {
+    val service = authService ?: return
+    viewModelScope.launch { service.signOut() }
+  }
+
+  fun clearAuthMessages() {
+    authService?.clearMessages()
+  }
 
   fun openCreateForm(defaultLocality: LocalityRegion) {
     _formState.value =
@@ -257,10 +288,11 @@ class MyBusinessesViewModel(
   class Factory(
     private val repository: PublishedBusinessRepository,
     private val placesRepository: PlacesRepository? = null,
+    private val authService: AuthService? = null,
   ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-      return MyBusinessesViewModel(repository, placesRepository) as T
+      return MyBusinessesViewModel(repository, placesRepository, authService) as T
     }
   }
 }

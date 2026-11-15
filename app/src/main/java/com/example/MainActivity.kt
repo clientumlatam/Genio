@@ -21,10 +21,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Assistant
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Storefront
+import androidx.compose.material.icons.rounded.Assistant
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Map
@@ -56,18 +58,22 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.data.auth.AuthService
 import com.example.data.local.GuiaGenioDatabase
 import com.example.data.local.PublishedBusinessRepository
 import com.example.data.places.LocationTracker
 import com.example.data.places.PlacesRepository
 import com.example.domain.model.DirectoryViewMode
 import com.example.ui.DirectoryViewModel
+import com.example.ui.AiAssistantViewModel
 import com.example.ui.MyBusinessesViewModel
 import com.example.ui.components.BusinessDetailSheet
 import com.example.ui.components.GuiaGenioBrandHeader
 import com.example.ui.components.GuiaGenioSplashOverlay
 import com.example.ui.components.LocalityPickerSheet
+import com.example.ui.screens.AiAssistantScreen
 import com.example.ui.screens.CategoriesScreen
 import com.example.ui.screens.ExploreScreen
 import com.example.ui.screens.MapScreen
@@ -90,9 +96,17 @@ enum class GuiaGenioTab(
     Icons.Rounded.Storefront,
     Icons.Outlined.Storefront,
   ),
+  AI_ASSISTANT(
+    "ai_assistant",
+    R.string.nav_ai_assistant,
+    Icons.Rounded.Assistant,
+    Icons.Outlined.Assistant,
+  ),
 }
 
 class MainActivity : ComponentActivity() {
+  private lateinit var authService: AuthService
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
@@ -102,6 +116,11 @@ class MainActivity : ComponentActivity() {
     val publishedRepository = PublishedBusinessRepository(database.businessDao())
     val placesRepository = PlacesRepository(appContext)
     val locationTracker = LocationTracker(appContext)
+    authService = AuthService(appContext)
+
+    lifecycleScope.launch {
+      authService.attemptAutoSignIn(this@MainActivity)
+    }
 
     setContent {
       GuiaGenioTheme {
@@ -112,14 +131,24 @@ class MainActivity : ComponentActivity() {
           )
         val myBusinessesViewModel: MyBusinessesViewModel =
           viewModel(
-            factory = MyBusinessesViewModel.Factory(publishedRepository, placesRepository)
+            factory =
+              MyBusinessesViewModel.Factory(publishedRepository, placesRepository, authService)
           )
+        val aiAssistantViewModel: AiAssistantViewModel = viewModel()
 
         GuiaGenioApp(
           directoryViewModel = directoryViewModel,
           myBusinessesViewModel = myBusinessesViewModel,
+          aiAssistantViewModel = aiAssistantViewModel,
         )
       }
+    }
+  }
+
+  override fun onDestroy() {
+    super.onDestroy()
+    if (::authService.isInitialized) {
+      authService.release()
     }
   }
 }
@@ -128,6 +157,7 @@ class MainActivity : ComponentActivity() {
 fun GuiaGenioApp(
   directoryViewModel: DirectoryViewModel,
   myBusinessesViewModel: MyBusinessesViewModel,
+  aiAssistantViewModel: AiAssistantViewModel,
 ) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
@@ -143,6 +173,7 @@ fun GuiaGenioApp(
   val focusedMapBusiness by directoryViewModel.focusedMapBusiness.collectAsStateWithLifecycle()
   val favoriteIds by directoryViewModel.favoriteIds.collectAsStateWithLifecycle()
 
+  val authState by myBusinessesViewModel.authState.collectAsStateWithLifecycle()
   val myBusinesses by myBusinessesViewModel.publishedBusinesses.collectAsStateWithLifecycle()
   val formState by myBusinessesViewModel.formState.collectAsStateWithLifecycle()
   val myBusinessFeedback by myBusinessesViewModel.feedbackMessage.collectAsStateWithLifecycle()
@@ -324,10 +355,15 @@ fun GuiaGenioApp(
 
               GuiaGenioTab.MY_BUSINESSES ->
                 MyBusinessesScreen(
+                  authState = authState,
                   businesses = myBusinesses,
                   formState = formState,
                   feedbackMessage = myBusinessFeedback,
                   defaultLocality = uiControl.selectedLocality,
+                  onGoogleSignIn = myBusinessesViewModel::signInWithGoogle,
+                  onUpdateOwnerProfile = myBusinessesViewModel::updateOwnerProfile,
+                  onSignOut = myBusinessesViewModel::signOut,
+                  onClearAuthMessages = myBusinessesViewModel::clearAuthMessages,
                   onClearFeedback = myBusinessesViewModel::clearFeedback,
                   onOpenCreate = myBusinessesViewModel::openCreateForm,
                   onOpenEdit = myBusinessesViewModel::openEditForm,
@@ -350,6 +386,9 @@ fun GuiaGenioApp(
                   onDeleteBusiness = myBusinessesViewModel::deleteBusiness,
                   onInspectBusiness = directoryViewModel::openBusinessDetail,
                 )
+
+              GuiaGenioTab.AI_ASSISTANT ->
+                AiAssistantScreen(aiAssistantViewModel = aiAssistantViewModel)
             }
           }
         }
