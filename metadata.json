@@ -1,0 +1,6 @@
+{
+  "name": "Guía Genio",
+  "description": "Directorio comercial, industrial y de servicios para Neuquén, Alto Valle y Vaca Muerta con OpenStreetMap y alta de comercios.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

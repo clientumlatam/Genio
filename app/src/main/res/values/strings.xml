@@ -1,0 +1,63 @@
+<resources>
+    <string name="app_name">Guía Genio</string>
+    <string name="tagline_region">Neuquén, Alto Valle y Vaca Muerta</string>
+    <string name="tagline_slogan">TU SOCIO EN EL ALTO VALLE</string>
+    <string name="nav_explore">Explorar</string>
+    <string name="nav_map">Mapa</string>
+    <string name="nav_categories">Rubros</string>
+    <string name="nav_my_businesses">Mis Comercios</string>
+
+    <string name="search_placeholder">Buscar comercio o rubro…</string>
+    <string name="autocomplete_categories_title">Rubros sugeridos</string>
+    <string name="autocomplete_places_title">Lugares en OpenStreetMap</string>
+    <string name="autocomplete_filter_category">Filtrar rubro</string>
+    <string name="map_section_title">Mapa en vivo</string>
+    <string name="map_expand">Ampliar</string>
+    <string name="map_collapse">Ocultar mapa</string>
+    <string name="map_show">Mostrar mapa en Neuquén</string>
+    <string name="filter_open_now">Abierto ahora</string>
+    <string name="filter_delivery">Delivery</string>
+    <string name="filter_whatsapp">WhatsApp</string>
+    <string name="filter_user_published">Mis publicados</string>
+    <string name="filter_all_categories">Todos los rubros</string>
+
+    <string name="view_mode_list">Lista</string>
+    <string name="view_mode_map">Mapa</string>
+    <string name="use_my_location">Mi ubicación</string>
+    <string name="select_locality">Elegir localidad</string>
+    <string name="search_this_area">Buscar en esta zona</string>
+
+    <string name="badge_open">Abierto</string>
+    <string name="badge_closed">Cerrado</string>
+    <string name="badge_delivery">Delivery</string>
+    <string name="badge_whatsapp">WhatsApp</string>
+    <string name="badge_published">Publicado en Guía Genio</string>
+
+    <string name="action_call">Llamar</string>
+    <string name="action_whatsapp">WhatsApp</string>
+    <string name="action_directions">Cómo llegar</string>
+    <string name="action_website">Sitio web</string>
+    <string name="action_share">Compartir</string>
+    <string name="action_retry">Reintentar</string>
+    <string name="action_save">Guardar comercio</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_delete">Eliminar</string>
+    <string name="action_edit">Editar</string>
+    <string name="action_publish_business">Publicar comercio</string>
+
+    <string name="empty_results_title">Sin resultados con estos filtros</string>
+    <string name="empty_results_body">Probá limpiar algún filtro, cambiar de localidad o buscar otro rubro comercial.</string>
+    <string name="clear_filters">Limpiar filtros</string>
+
+    <string name="my_businesses_title">Mis Comercios</string>
+    <string name="my_businesses_subtitle">Publicá tu negocio o servicio profesional y mostralo en el mapa del Alto Valle.</string>
+    <string name="my_businesses_empty_title">Todavía no publicaste comercios</string>
+    <string name="my_businesses_empty_body">Tocá el botón + para cargar tu primer comercio, rubro, WhatsApp y pin en el mapa.</string>
+    <string name="local_storage_notice">Tus comercios se guardan en el dispositivo (la sincronización en la nube requiere habilitar permisos de Firebase).</string>
+
+    <string name="cd_app_logo">Emblema de Guía Genio</string>
+    <string name="cd_hero_banner">Paisaje editorial de Neuquén, Alto Valle y Vaca Muerta</string>
+    <string name="cd_business_photo">Foto del comercio</string>
+    <string name="cd_favorite_toggle">Guardar en favoritos</string>
+    <string name="cd_clear_search">Limpiar búsqueda</string>
+</resources>

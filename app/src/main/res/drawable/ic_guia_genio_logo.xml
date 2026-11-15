@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Golden Amber Map Pin Left Half -->
+    <path
+        android:fillColor="#E09419"
+        android:pathData="M54,14 C35.2,14 21,28.5 21,47 C21,67.5 46,88.5 54,96 L54,14 Z" />
+
+    <!-- Deeper Amber Map Pin Right Half (subtle 3D facet) -->
+    <path
+        android:fillColor="#C67B0C"
+        android:pathData="M54,14 L54,96 C62,88.5 87,67.5 87,47 C87,28.5 72.8,14 54,14 Z" />
+
+    <!-- Crisp White Inner Circle Backing -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,23 A23,23 0 1,0 54,69 A23,23 0 1,0 54,23 Z" />
+
+    <!-- Cobalt Blue Magnifying Glass Ring -->
+    <path
+        android:fillColor="#0E3B8C"
+        android:pathData="M54,25 A21,21 0 1,0 54,67 A21,21 0 1,0 54,25 Z M54,30.5 A15.5,15.5 0 1,1 54,61.5 A15.5,15.5 0 1,1 54,30.5 Z" />
+
+    <!-- Magnifying Glass Handle -->
+    <path
+        android:fillColor="#0E3B8C"
+        android:pathData="M67.5,58.5 L72.5,54 L84.5,67 C86,68.5 86,71.2 84.3,72.8 L83.8,73.3 C82.2,74.9 79.5,74.8 78,73.2 L67.5,58.5 Z" />
+
+    <!-- Oil Derrick Tower (Vaca Muerta) inside Magnifying Glass -->
+    <!-- Left and right legs -->
+    <path
+        android:fillColor="#0E3B8C"
+        android:pathData="M52,37 L47.2,57.5 L49.6,57.5 L53.4,37 Z" />
+    <path
+        android:fillColor="#0E3B8C"
+        android:pathData="M56,37 L60.8,57.5 L58.4,57.5 L54.6,37 Z" />
+    <!-- Top cap & base -->
+    <path
+        android:fillColor="#0E3B8C"
+        android:pathData="M51.5,37 L56.5,37 L56.5,39 L51.5,39 Z" />
+    <path
+        android:fillColor="#0E3B8C"
+        android:pathData="M45.5,56.5 L62.5,56.5 L62.5,58.8 L45.5,58.8 Z" />
+    <!-- Cross trusses -->
+    <path
+        android:strokeColor="#0E3B8C"
+        android:strokeWidth="1.4"
+        android:pathData="M50.5,44 L57.5,44 M49,50.5 L59,50.5 M51,44 L58.2,50.5 M57,44 L49.8,50.5 M49.5,50.5 L59.5,56.5 M58.5,50.5 L48.5,56.5" />
+
+    <!-- Oil drops above derrick -->
+    <path
+        android:fillColor="#0E3B8C"
+        android:pathData="M54,31.5 C53,33.2 52.8,34.4 54,34.9 C55.2,34.4 55,33.2 54,31.5 Z" />
+    <path
+        android:fillColor="#0E3B8C"
+        android:pathData="M49.5,33.2 C49.2,34.7 49.8,35.6 50.8,35.3 C51.2,34.3 50.4,33.6 49.5,33.2 Z" />
+    <path
+        android:fillColor="#0E3B8C"
+        android:pathData="M58.5,33.2 C57.6,33.6 56.8,34.3 57.2,35.3 C58.2,35.6 58.8,34.7 58.5,33.2 Z" />
+</vector>
