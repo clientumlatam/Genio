@@ -54,6 +54,9 @@ import com.example.domain.model.DirectoryCategories
 import com.example.domain.model.LocalityRegion
 import com.example.domain.model.PatagonianLocalities
 import com.example.ui.BusinessFormState
+import com.example.ui.screens.CARTO_VOYAGER_TILE_SOURCE
+import com.example.ui.screens.createCategoryPinDrawable
+import com.example.ui.screens.ensureOsmConfigured
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -266,7 +269,7 @@ fun BusinessFormBottomSheet(
             modifier = Modifier.fillMaxSize().testTag("my_business_map_picker"),
             factory = { ctx ->
               MapView(ctx).apply {
-                setTileSource(TileSourceFactory.CARTO_VOYAGER)
+                setTileSource(CARTO_VOYAGER_TILE_SOURCE)
                 isTilesScaledToDpi = true
                 setUseDataConnection(true)
                 setMultiTouchControls(true)

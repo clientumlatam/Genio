@@ -395,7 +395,7 @@ fun DirectoryMapCanvas(
 
         val centerPoint = (userGpsCoordinate?.takeIf { selectedLocality.isUserLocation } ?: selectedLocality.latLng).toOsmGeoPoint()
         val nearbyZoneOverlay =
-          Polygon(mapView).apply {
+          Polygon().apply {
             points = Polygon.pointsAsCircle(centerPoint, selectedLocality.radiusMeters.coerceAtMost(5000.0))
             fillPaint.color = android.graphics.Color.argb(22, 21, 70, 166)
             outlinePaint.color = android.graphics.Color.argb(110, 21, 70, 166)
@@ -618,6 +618,16 @@ fun DirectoryMapCanvas(
                   maxLines = 1,
                   overflow = TextOverflow.Ellipsis,
                 )
+                if (!item.description.isNullOrBlank()) {
+                  Spacer(modifier = Modifier.height(2.dp))
+                  Text(
+                    text = item.description!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                  )
+                }
               }
               IconButton(onClick = { pinnedBusiness = null }, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.action_cancel))
