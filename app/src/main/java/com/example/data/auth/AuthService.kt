@@ -42,6 +42,7 @@ data class AuthUiState(
   val currentUser: BusinessOwnerUser? = null,
   val isLoading: Boolean = false,
   val isFirebaseConfigured: Boolean = false,
+  val firebaseConfigMessage: String? = null,
   val errorMessage: String? = null,
   val infoMessage: String? = null,
 )
@@ -59,7 +60,7 @@ sealed interface AuthSignInOutcome {
  */
 class AuthService(context: Context) {
 
-  private val appContext = context.applicationContext
+  private val appContext = context.applicationContext ?: context
   private val credentialManager = CredentialManager.create(appContext)
   private val profilePrefs =
     appContext.getSharedPreferences("guia_genio_owner_profile", Context.MODE_PRIVATE)
@@ -71,8 +72,8 @@ class AuthService(context: Context) {
   val authState: StateFlow<AuthUiState> = _authState.asStateFlow()
 
   init {
-    val configured = ensureFirebaseInitialized()
-    if (configured) {
+    val diagnostic = checkFirebaseAuthConfiguration()
+    if (diagnostic == null) {
       val auth = Firebase.auth
       firebaseAuth = auth
       val listener = FirebaseAuth.AuthStateListener { instance ->
@@ -80,6 +81,7 @@ class AuthService(context: Context) {
           state.copy(
             currentUser = instance.currentUser?.toOwnerUser(),
             isFirebaseConfigured = true,
+            firebaseConfigMessage = null,
             isLoading = false,
           )
         }
@@ -90,6 +92,7 @@ class AuthService(context: Context) {
         it.copy(
           currentUser = auth.currentUser?.toOwnerUser(),
           isFirebaseConfigured = true,
+          firebaseConfigMessage = null,
         )
       }
     } else {
@@ -97,21 +100,31 @@ class AuthService(context: Context) {
         it.copy(
           currentUser = null,
           isFirebaseConfigured = false,
+          firebaseConfigMessage = diagnostic,
         )
       }
     }
   }
 
-  private fun ensureFirebaseInitialized(): Boolean {
+  private fun checkFirebaseAuthConfiguration(): String? {
     return try {
-      if (FirebaseApp.getApps(appContext).isNotEmpty()) {
-        true
-      } else {
-        FirebaseApp.initializeApp(appContext) != null
+      val app =
+        FirebaseApp.getApps(appContext).firstOrNull()
+          ?: FirebaseApp.initializeApp(appContext)
+      if (app == null) {
+        return "Falta app/google-services.json para habilitar Google Sign-In."
       }
+      val projectId = app.options.projectId?.trim().orEmpty()
+      if (projectId.isBlank() || projectId == "remixed-project-id") {
+        return "google-services.json contiene un projectId de plantilla sin aprovisionar."
+      }
+      if (resolveWebClientId(appContext) == null) {
+        return "Falta el recurso default_web_client_id generado por google-services.json."
+      }
+      null
     } catch (e: Exception) {
       Log.w(TAG, "FirebaseApp no inicializado (verificá google-services.json): ${e.message}")
-      false
+      "No se pudo inicializar Firebase Auth (${e.localizedMessage ?: "sin detalle"})."
     }
   }
 
@@ -119,7 +132,9 @@ class AuthService(context: Context) {
     val resId =
       context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
     if (resId == 0) return null
-    return context.getString(resId).takeIf { it.isNotBlank() }
+    val value = context.getString(resId).trim()
+    if (value.isBlank() || value.contains("placeholder", ignoreCase = true)) return null
+    return value
   }
 
   /**

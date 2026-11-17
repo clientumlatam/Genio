@@ -91,6 +91,8 @@ fun BusinessDetailSheet(
   onSubmitReview: (Int, String) -> Unit = { _, _ -> },
   onSignInRequest: () -> Unit = {},
   onDismiss: () -> Unit,
+  isFirestoreConfigured: Boolean = true,
+  firestoreDisabledMessage: String? = null,
 ) {
   val context = LocalContext.current
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -497,7 +499,22 @@ fun BusinessDetailSheet(
 
       Spacer(modifier = Modifier.height(10.dp))
 
-      if (currentUserId != null) {
+      if (!isFirestoreConfigured) {
+        Surface(
+          shape = RoundedCornerShape(14.dp),
+          color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f),
+          modifier = Modifier.fillMaxWidth().testTag("reviews_firebase_disabled_banner"),
+        ) {
+          Text(
+            text =
+              firestoreDisabledMessage
+                ?: stringResource(R.string.auth_firebase_pending_notice),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(14.dp),
+          )
+        }
+      } else if (currentUserId != null) {
         Card(
           shape = RoundedCornerShape(16.dp),
           colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),

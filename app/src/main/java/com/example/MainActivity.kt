@@ -68,6 +68,7 @@ import com.example.data.local.GuiaGenioDatabase
 import com.example.data.local.PublishedBusinessRepository
 import com.example.data.places.LocationTracker
 import com.example.data.places.PlacesRepository
+import com.example.data.remote.FirestoreConfigStatus
 import com.example.data.remote.FirestoreDirectoryRepository
 import com.example.domain.model.DirectoryViewMode
 import com.example.ui.AiAssistantViewModel
@@ -215,6 +216,9 @@ fun GuiaGenioApp(
   val myBusinesses by myBusinessesViewModel.publishedBusinesses.collectAsStateWithLifecycle()
   val formState by myBusinessesViewModel.formState.collectAsStateWithLifecycle()
   val myBusinessFeedback by myBusinessesViewModel.feedbackMessage.collectAsStateWithLifecycle()
+  val isFirestoreConfigured = myBusinessesViewModel.isFirestoreConfigured
+  val firestoreDisabledMessage =
+    (myBusinessesViewModel.firestoreConfigStatus as? FirestoreConfigStatus.Disabled)?.userMessage
 
   LaunchedEffect(uiFeedbackMessage) {
     val msg = uiFeedbackMessage ?: return@LaunchedEffect
@@ -419,6 +423,8 @@ fun GuiaGenioApp(
                     onBusinessClick = directoryViewModel::openBusinessDetail,
                     onToggleFavorite = directoryViewModel::toggleFavorite,
                     onExploreClick = { currentTab = GuiaGenioTab.EXPLORE },
+                    isFirestoreConfigured = isFirestoreConfigured,
+                    firestoreDisabledMessage = firestoreDisabledMessage,
                   )
 
                 GuiaGenioTab.MY_BUSINESSES ->
@@ -438,6 +444,8 @@ fun GuiaGenioApp(
                     onToggleDelivery = myBusinessesViewModel::toggleDelivery,
                     onDeleteBusiness = myBusinessesViewModel::deleteBusiness,
                     onInspectBusiness = directoryViewModel::openBusinessDetail,
+                    isFirestoreConfigured = isFirestoreConfigured,
+                    firestoreDisabledMessage = firestoreDisabledMessage,
                   )
 
                 GuiaGenioTab.AI_ASSISTANT ->
@@ -484,6 +492,8 @@ fun GuiaGenioApp(
       },
       onSignInRequest = { myBusinessesViewModel.signInWithGoogle(context) },
       onDismiss = directoryViewModel::closeBusinessDetail,
+      isFirestoreConfigured = isFirestoreConfigured,
+      firestoreDisabledMessage = firestoreDisabledMessage,
     )
   }
 

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -51,6 +53,8 @@ fun FavoritesScreen(
   onToggleFavorite: (DirectoryBusiness) -> Unit,
   onExploreClick: () -> Unit,
   modifier: Modifier = Modifier,
+  isFirestoreConfigured: Boolean = true,
+  firestoreDisabledMessage: String? = null,
 ) {
   val context = LocalContext.current
   val signedInUser = authState.currentUser
@@ -73,6 +77,37 @@ fun FavoritesScreen(
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+      }
+    }
+
+    if (!isFirestoreConfigured || !authState.isFirebaseConfigured) {
+      item(key = "favorites_firebase_status") {
+        Surface(
+          shape = RoundedCornerShape(14.dp),
+          color = MaterialTheme.colorScheme.secondaryContainer,
+          modifier = Modifier.testTag("favorites_firebase_disabled_banner"),
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Info,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.onSecondaryContainer,
+              modifier = Modifier.size(18.dp),
+            )
+            Text(
+              text =
+                authState.firebaseConfigMessage
+                  ?: firestoreDisabledMessage
+                  ?: stringResource(R.string.auth_firebase_pending_notice),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+          }
+        }
       }
     }
 

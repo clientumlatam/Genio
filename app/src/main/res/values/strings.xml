@@ -57,10 +57,11 @@
     <string name="my_businesses_subtitle">Publicá tu negocio o servicio profesional y mostralo en el mapa del Alto Valle.</string>
     <string name="my_businesses_empty_title">Todavía no publicaste comercios</string>
     <string name="my_businesses_empty_body">Tocá el botón + para cargar tu primer comercio, rubro, descripción, teléfono y pin en el mapa.</string>
-    <string name="local_storage_notice">Tus comercios se vinculan a tu cuenta de Google y se sincronizan con Firestore.</string>
+    <string name="local_storage_notice">Tus comercios se vinculan a tu cuenta de Google y se sincronizan en vivo con Firestore.</string>
+    <string name="local_only_storage_notice">Firebase deshabilitado: los cambios se guardan solo en este dispositivo y no se sincronizan en la nube.</string>
 
     <string name="favorites_title">Mis Favoritos</string>
-    <string name="favorites_subtitle">Tu lista personalizada de comercios y servicios guardados en Firestore.</string>
+    <string name="favorites_subtitle">Tu lista personalizada de comercios y servicios guardados.</string>
     <string name="favorites_empty_title">Todavía no guardaste favoritos</string>
     <string name="favorites_empty_body">Tocá el ícono de marcador en cualquier comercio para guardarlo y acceder rápido desde acá.</string>
     <string name="favorites_sign_in_title">Guardá tus comercios favoritos</string>
@@ -82,7 +83,7 @@
     <string name="auth_profile_title">Perfil de dueño de comercio</string>
     <string name="auth_profile_name_label">Nombre público o razón social</string>
     <string name="auth_profile_save">Guardar perfil</string>
-    <string name="auth_firebase_pending_notice">Para sincronizar en vivo con Google Sign-In y Firestore, agregá el archivo google-services.json de tu proyecto Firebase en app/.</string>
+    <string name="auth_firebase_pending_notice">Firebase deshabilitado: falta app/google-services.json o el recurso firestore_database_id en res/values/firebase_applet_config.xml para habilitar Google Sign-In y Firestore.</string>
 
     <string name="map_base_layer_label">Capa base: OpenStreetMap</string>
     <string name="map_initial_marker_title">Neuquén Capital</string>

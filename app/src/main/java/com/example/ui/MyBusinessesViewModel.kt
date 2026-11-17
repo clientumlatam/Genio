@@ -10,6 +10,7 @@ import com.example.data.local.PublishedBusinessEntity
 import com.example.data.local.PublishedBusinessRepository
 import com.example.data.places.PlacesRepository
 import com.example.data.remote.FirestoreBusinessListing
+import com.example.data.remote.FirestoreConfigStatus
 import com.example.data.remote.FirestoreDirectoryRepository
 import com.example.domain.model.BusinessCategory
 import com.example.domain.model.DirectoryBusiness
@@ -55,6 +56,17 @@ class MyBusinessesViewModel(
   val authState: StateFlow<AuthUiState> =
     authService?.authState ?: MutableStateFlow(AuthUiState()).asStateFlow()
 
+  val isFirestoreConfigured: Boolean
+    get() = firestoreRepository?.isConfigured == true
+
+  val firestoreConfigStatus: FirestoreConfigStatus
+    get() =
+      firestoreRepository?.configStatus
+        ?: FirestoreConfigStatus.Disabled(
+          reason = FirestoreConfigStatus.Disabled.Reason.INIT_FAILED,
+          userMessage = "Repositorio Firestore no disponible en esta instancia.",
+        )
+
   val publishedBusinesses: StateFlow<List<PublishedBusinessEntity>> =
     repository.publishedBusinesses.stateIn(
       scope = viewModelScope,
@@ -74,11 +86,16 @@ class MyBusinessesViewModel(
       service.signInWithGoogle(activityContext)
       val signedUser = service.authState.value.currentUser
       if (signedUser != null && firestoreRepository?.isConfigured == true) {
-        firestoreRepository.upsertUserProfile(
-          userId = signedUser.uid,
-          displayName = signedUser.displayName,
-          preferredLocalityId = signedUser.preferredLocalityId,
-        )
+        val syncResult =
+          firestoreRepository.upsertUserProfile(
+            userId = signedUser.uid,
+            displayName = signedUser.displayName,
+            preferredLocalityId = signedUser.preferredLocalityId,
+          )
+        syncResult.onFailure { err ->
+          _feedbackMessage.value =
+            "Sesión iniciada, pero falló la sincronización del perfil en Firestore: ${err.localizedMessage ?: "error de red"}"
+        }
       }
     }
   }
@@ -90,13 +107,23 @@ class MyBusinessesViewModel(
       if (ok) {
         val signedUser = service.authState.value.currentUser
         if (signedUser != null && firestoreRepository?.isConfigured == true) {
-          firestoreRepository.upsertUserProfile(
-            userId = signedUser.uid,
-            displayName = signedUser.displayName,
-            preferredLocalityId = signedUser.preferredLocalityId,
-          )
+          val syncResult =
+            firestoreRepository.upsertUserProfile(
+              userId = signedUser.uid,
+              displayName = signedUser.displayName,
+              preferredLocalityId = signedUser.preferredLocalityId,
+            )
+          _feedbackMessage.value =
+            syncResult.fold(
+              onSuccess = { "Perfil de dueño sincronizado en Firestore" },
+              onFailure = { err ->
+                "Perfil guardado localmente, pero no sincronizado en Firestore: ${err.localizedMessage ?: "error"}"
+              },
+            )
+        } else {
+          _feedbackMessage.value =
+            "Perfil actualizado solo en este dispositivo (Firestore deshabilitado)"
         }
-        _feedbackMessage.value = "Perfil de dueño actualizado"
       }
     }
   }
@@ -339,10 +366,10 @@ class MyBusinessesViewModel(
       _feedbackMessage.value =
         when {
           cloudSynced && state.editingFirestoreDocId == null ->
-            "Comercio publicado en Firestore"
+            "Comercio publicado y sincronizado en Firestore"
           cloudSynced -> "Comercio actualizado en Firestore"
-          state.editingId == 0L -> "Comercio guardado en Guía Genio"
-          else -> "Comercio actualizado"
+          else ->
+            "Guardado solo en este dispositivo (Firebase deshabilitado: sin sincronización cloud)"
         }
     }
   }
@@ -351,12 +378,28 @@ class MyBusinessesViewModel(
     viewModelScope.launch {
       val nextOpen = !entity.isOpenNow
       repository.toggleOpenStatus(entity.id, nextOpen)
-      if (entity.firestoreDocId.isNotBlank() && firestoreRepository?.isConfigured == true) {
-        firestoreRepository.updateBusinessOperationalFlags(
-          docId = entity.firestoreDocId,
-          isOpenNow = nextOpen,
-          hasDelivery = entity.hasDelivery,
-        )
+      val remoteRepo = firestoreRepository
+      when {
+        remoteRepo == null || !remoteRepo.isConfigured -> {
+          _feedbackMessage.value =
+            "Horario actualizado solo en este dispositivo (Firebase deshabilitado)"
+        }
+        entity.firestoreDocId.isBlank() -> {
+          _feedbackMessage.value =
+            "Horario actualizado localmente (pendiente de alta en Firestore)"
+        }
+        else -> {
+          val result =
+            remoteRepo.updateBusinessOperationalFlags(
+              docId = entity.firestoreDocId,
+              isOpenNow = nextOpen,
+              hasDelivery = entity.hasDelivery,
+            )
+          result.onFailure { err ->
+            _feedbackMessage.value =
+              "Actualizado localmente, pero falló Firestore: ${err.localizedMessage ?: "error de red"}"
+          }
+        }
       }
     }
   }
@@ -365,23 +408,54 @@ class MyBusinessesViewModel(
     viewModelScope.launch {
       val nextDelivery = !entity.hasDelivery
       repository.toggleDeliveryStatus(entity.id, nextDelivery)
-      if (entity.firestoreDocId.isNotBlank() && firestoreRepository?.isConfigured == true) {
-        firestoreRepository.updateBusinessOperationalFlags(
-          docId = entity.firestoreDocId,
-          isOpenNow = entity.isOpenNow,
-          hasDelivery = nextDelivery,
-        )
+      val remoteRepo = firestoreRepository
+      when {
+        remoteRepo == null || !remoteRepo.isConfigured -> {
+          _feedbackMessage.value =
+            "Delivery actualizado solo en este dispositivo (Firebase deshabilitado)"
+        }
+        entity.firestoreDocId.isBlank() -> {
+          _feedbackMessage.value =
+            "Delivery actualizado localmente (pendiente de alta en Firestore)"
+        }
+        else -> {
+          val result =
+            remoteRepo.updateBusinessOperationalFlags(
+              docId = entity.firestoreDocId,
+              isOpenNow = entity.isOpenNow,
+              hasDelivery = nextDelivery,
+            )
+          result.onFailure { err ->
+            _feedbackMessage.value =
+              "Actualizado localmente, pero falló Firestore: ${err.localizedMessage ?: "error de red"}"
+          }
+        }
       }
     }
   }
 
   fun deleteBusiness(entity: PublishedBusinessEntity) {
     viewModelScope.launch {
-      if (entity.firestoreDocId.isNotBlank() && firestoreRepository?.isConfigured == true) {
-        firestoreRepository.deleteBusiness(entity.firestoreDocId)
+      val remoteRepo = firestoreRepository
+      if (entity.firestoreDocId.isNotBlank() && remoteRepo != null && remoteRepo.isConfigured) {
+        val cloudDelete = remoteRepo.deleteBusiness(entity.firestoreDocId)
+        if (cloudDelete.isFailure) {
+          val err = cloudDelete.exceptionOrNull()
+          _feedbackMessage.value =
+            "No se pudo eliminar en Firestore: ${err?.localizedMessage ?: "error de permisos o red"}"
+          return@launch
+        }
+        repository.deleteBusiness(entity.id)
+        _feedbackMessage.value = "Comercio eliminado de este dispositivo y de Firestore"
+      } else {
+        repository.deleteBusiness(entity.id)
+        _feedbackMessage.value =
+          if (entity.firestoreDocId.isNotBlank()) {
+            "Eliminado solo de este dispositivo (Firebase deshabilitado; sigue en la nube)"
+          } else {
+            "Comercio eliminado de este dispositivo (Firebase deshabilitado)"
+          }
       }
-      repository.deleteBusiness(entity.id)
-      _feedbackMessage.value = "Comercio eliminado"
     }
   }
 

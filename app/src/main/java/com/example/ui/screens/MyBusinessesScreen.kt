@@ -97,6 +97,8 @@ fun MyBusinessesScreen(
   onDeleteBusiness: (PublishedBusinessEntity) -> Unit,
   onInspectBusiness: (DirectoryBusiness) -> Unit,
   modifier: Modifier = Modifier,
+  isFirestoreConfigured: Boolean = true,
+  firestoreDisabledMessage: String? = null,
 ) {
   val context = LocalContext.current
   val snackbarHostState = remember { SnackbarHostState() }
@@ -158,6 +160,8 @@ fun MyBusinessesScreen(
         item(key = "owner_auth_gate") {
           BusinessOwnerSignInCard(
             authState = authState,
+            isFirestoreConfigured = isFirestoreConfigured,
+            firestoreDisabledMessage = firestoreDisabledMessage,
             onSignInClick = { onGoogleSignIn(context) },
           )
         }
@@ -173,7 +177,13 @@ fun MyBusinessesScreen(
         item(key = "storage_notice") {
           Surface(
             shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+            color =
+              if (isFirestoreConfigured) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+              } else {
+                MaterialTheme.colorScheme.secondaryContainer
+              },
+            modifier = Modifier.testTag("my_businesses_sync_status_banner"),
           ) {
             Row(
               modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -183,13 +193,23 @@ fun MyBusinessesScreen(
               Icon(
                 imageVector = Icons.Rounded.Info,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint =
+                  if (isFirestoreConfigured) MaterialTheme.colorScheme.primary
+                  else MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.size(18.dp),
               )
               Text(
-                text = stringResource(R.string.local_storage_notice),
+                text =
+                  if (isFirestoreConfigured) {
+                    stringResource(R.string.local_storage_notice)
+                  } else {
+                    firestoreDisabledMessage
+                      ?: stringResource(R.string.local_only_storage_notice)
+                  },
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                color =
+                  if (isFirestoreConfigured) MaterialTheme.colorScheme.onPrimaryContainer
+                  else MaterialTheme.colorScheme.onSecondaryContainer,
               )
             }
           }
@@ -280,6 +300,8 @@ fun MyBusinessesScreen(
 @Composable
 private fun BusinessOwnerSignInCard(
   authState: AuthUiState,
+  isFirestoreConfigured: Boolean,
+  firestoreDisabledMessage: String?,
   onSignInClick: () -> Unit,
 ) {
   Card(
@@ -322,7 +344,7 @@ private fun BusinessOwnerSignInCard(
         textAlign = TextAlign.Center,
       )
 
-      if (!authState.isFirebaseConfigured) {
+      if (!authState.isFirebaseConfigured || !isFirestoreConfigured) {
         Spacer(modifier = Modifier.height(12.dp))
         Surface(
           shape = RoundedCornerShape(12.dp),
@@ -340,7 +362,10 @@ private fun BusinessOwnerSignInCard(
               modifier = Modifier.size(18.dp),
             )
             Text(
-              text = stringResource(R.string.auth_firebase_pending_notice),
+              text =
+                authState.firebaseConfigMessage
+                  ?: firestoreDisabledMessage
+                  ?: stringResource(R.string.auth_firebase_pending_notice),
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSecondaryContainer,
             )

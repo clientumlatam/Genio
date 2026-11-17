@@ -12,6 +12,7 @@ import com.example.data.local.PublishedBusinessRepository
 import com.example.data.places.LocationTracker
 import com.example.data.places.PlaceAutocompleteSuggestion
 import com.example.data.places.PlacesRepository
+import com.example.data.remote.FirestoreConfigStatus
 import com.example.data.remote.FirestoreDirectoryRepository
 import com.example.domain.model.BusinessCategory
 import com.example.domain.model.BusinessReview
@@ -103,6 +104,17 @@ class DirectoryViewModel(
 
   private val _uiFeedbackMessage = MutableStateFlow<String?>(null)
   val uiFeedbackMessage: StateFlow<String?> = _uiFeedbackMessage.asStateFlow()
+
+  val isFirestoreConfigured: Boolean
+    get() = firestoreRepository?.isConfigured == true
+
+  val firestoreConfigStatus: FirestoreConfigStatus
+    get() =
+      firestoreRepository?.configStatus
+        ?: FirestoreConfigStatus.Disabled(
+          reason = FirestoreConfigStatus.Disabled.Reason.INIT_FAILED,
+          userMessage = "Repositorio Firestore no disponible en esta instancia.",
+        )
 
   val currentUser: StateFlow<BusinessOwnerUser?> =
     (authService?.authState?.map { it.currentUser } ?: flowOf(null))
@@ -351,14 +363,15 @@ class DirectoryViewModel(
     }
     viewModelScope.launch {
       val currentlyFav = favoriteIds.value.contains(business.id)
-      // Actualizar espejo local y guardar en Firestore cuando está configurado
+      // Actualizar espejo local y guardar en Firestore únicamente si está configurado
       publishedRepository.toggleFavorite(business, currentlyFav)
       if (firestoreRepository != null && firestoreRepository.isConfigured) {
         val result = firestoreRepository.toggleFavorite(user.uid, business, currentlyFav)
         result.fold(
           onSuccess = {
             _uiFeedbackMessage.value =
-              if (currentlyFav) "Quitado de Favoritos" else "Guardado en Favoritos"
+              if (currentlyFav) "Quitado de Favoritos en Firestore"
+              else "Guardado en Favoritos en Firestore"
           },
           onFailure = { error ->
             _uiFeedbackMessage.value =
@@ -367,7 +380,11 @@ class DirectoryViewModel(
         )
       } else {
         _uiFeedbackMessage.value =
-          if (currentlyFav) "Quitado de Favoritos" else "Guardado en Favoritos"
+          if (currentlyFav) {
+            "Quitado de Favoritos locales (Firebase deshabilitado: no sincroniza en la nube)"
+          } else {
+            "Guardado en Favoritos locales (Firebase deshabilitado: no sincroniza en la nube)"
+          }
       }
     }
   }
@@ -379,8 +396,10 @@ class DirectoryViewModel(
       return
     }
     val repo = firestoreRepository
-    if (repo == null) {
-      _reviewFeedback.value = "Repositorio Firestore no disponible."
+    if (repo == null || !repo.isConfigured) {
+      _reviewFeedback.value =
+        repo?.disabledReasonMessage()
+          ?: "Firebase deshabilitado: no se pueden publicar reseñas en Firestore."
       return
     }
     viewModelScope.launch {
