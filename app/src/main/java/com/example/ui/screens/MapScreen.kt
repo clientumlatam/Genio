@@ -10,6 +10,7 @@ import android.graphics.Path
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -35,18 +36,24 @@ import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Directions
+import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -99,7 +106,12 @@ import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 fun MapScreen(
   uiControl: DirectoryUiSnapshot,
   resultsState: DirectoryResultsState,
+  mapSearchQuery: String,
+  filteredBusinesses: List<DirectoryBusiness>,
   focusedBusiness: DirectoryBusiness? = null,
+  userGpsCoordinate: GeoPointCoord? = null,
+  gpsCenterRequestNonce: Int = 0,
+  onMapSearchQueryChange: (String) -> Unit,
   onFocusedBusinessConsumed: () -> Unit = {},
   onSelectLocality: (LocalityRegion) -> Unit,
   onToggleOpenNow: () -> Unit,
@@ -107,14 +119,59 @@ fun MapScreen(
   onToggleWhatsApp: () -> Unit,
   onBusinessClick: (DirectoryBusiness) -> Unit,
   onSearchInArea: (GeoPointCoord) -> Unit,
+  onRequestMyLocation: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
   Column(modifier = modifier.fillMaxSize()) {
+    // Barra de búsqueda superior para filtrar marcadores por nombre o rubro desde Firestore
+    OutlinedTextField(
+      value = mapSearchQuery,
+      onValueChange = onMapSearchQueryChange,
+      placeholder = {
+        Text(
+          text = stringResource(R.string.map_search_placeholder),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+      },
+      leadingIcon = {
+        Icon(
+          imageVector = Icons.Rounded.Search,
+          contentDescription = null,
+          tint = MaterialTheme.colorScheme.primary,
+        )
+      },
+      trailingIcon = {
+        if (mapSearchQuery.isNotEmpty()) {
+          IconButton(
+            onClick = { onMapSearchQueryChange("") },
+            modifier = Modifier.size(48.dp).testTag("map_search_clear"),
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Close,
+              contentDescription = stringResource(R.string.cd_clear_search),
+            )
+          }
+        }
+      },
+      singleLine = true,
+      shape = RoundedCornerShape(28.dp),
+      colors =
+        OutlinedTextFieldDefaults.colors(
+          focusedContainerColor = MaterialTheme.colorScheme.surface,
+          unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+        ),
+      modifier =
+        Modifier.fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 6.dp)
+          .testTag("map_search_bar"),
+    )
+
     Row(
       modifier =
         Modifier.fillMaxWidth()
           .horizontalScroll(rememberScrollState())
-          .padding(horizontal = 16.dp, vertical = 4.dp),
+          .padding(horizontal = 16.dp, vertical = 2.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
       PatagonianLocalities.all.take(7).forEach { locality ->
@@ -160,10 +217,15 @@ fun MapScreen(
     DirectoryMapCanvas(
       selectedLocality = uiControl.selectedLocality,
       resultsState = resultsState,
+      businessesOverride = filteredBusinesses,
       focusedBusiness = focusedBusiness,
+      userGpsCoordinate = userGpsCoordinate,
+      gpsCenterRequestNonce = gpsCenterRequestNonce,
+      isResolvingLocation = uiControl.isResolvingLocation,
       onFocusedBusinessConsumed = onFocusedBusinessConsumed,
       onBusinessClick = onBusinessClick,
       onSearchInArea = onSearchInArea,
+      onRequestMyLocation = onRequestMyLocation,
       modifier = Modifier.fillMaxSize().padding(top = 4.dp),
     )
   }
@@ -176,8 +238,13 @@ fun DirectoryMapCanvas(
   onBusinessClick: (DirectoryBusiness) -> Unit,
   onSearchInArea: (GeoPointCoord) -> Unit,
   modifier: Modifier = Modifier,
+  businessesOverride: List<DirectoryBusiness>? = null,
   focusedBusiness: DirectoryBusiness? = null,
+  userGpsCoordinate: GeoPointCoord? = null,
+  gpsCenterRequestNonce: Int = 0,
+  isResolvingLocation: Boolean = false,
   onFocusedBusinessConsumed: () -> Unit = {},
+  onRequestMyLocation: (() -> Unit)? = null,
   isCompactPreview: Boolean = false,
 ) {
   val context = LocalContext.current
@@ -207,10 +274,11 @@ fun DirectoryMapCanvas(
   val initialCenterMarkerSnippet = stringResource(R.string.map_initial_marker_snippet)
 
   val baseBusinesses =
-    when (resultsState) {
-      is DirectoryResultsState.Success -> resultsState.businesses
-      else -> emptyList()
-    }
+    businessesOverride
+      ?: when (resultsState) {
+        is DirectoryResultsState.Success -> resultsState.businesses
+        else -> emptyList()
+      }
   val businesses =
     remember(baseBusinesses, focusedBusiness) {
       if (focusedBusiness != null && baseBusinesses.none { it.id == focusedBusiness.id }) {
@@ -225,10 +293,26 @@ fun DirectoryMapCanvas(
       pinnedBusiness = null
       hasMovedMap = false
       suppressMoveUntilMs = System.currentTimeMillis() + 900L
-      val targetZoom = if (selectedLocality.id == "neuquen_capital") 13.5 else 13.8
+      val targetZoom =
+        when {
+          selectedLocality.isUserLocation -> 15.8
+          selectedLocality.id == "neuquen_capital" -> 13.5
+          else -> 13.8
+        }
       mapViewRef?.controller?.apply {
         setZoom(targetZoom)
         animateTo(selectedLocality.latLng.toOsmGeoPoint())
+      }
+    }
+  }
+
+  LaunchedEffect(gpsCenterRequestNonce) {
+    if (gpsCenterRequestNonce > 0 && userGpsCoordinate != null) {
+      hasMovedMap = false
+      suppressMoveUntilMs = System.currentTimeMillis() + 900L
+      mapViewRef?.controller?.apply {
+        setZoom(15.8)
+        animateTo(userGpsCoordinate.toOsmGeoPoint())
       }
     }
   }
@@ -324,10 +408,10 @@ fun DirectoryMapCanvas(
         }
       },
       update = { mapView ->
-        // Preservar capas base (ScaleBar, MyLocation, MapEvents) y actualizar radio, marcador inicial y comercios
+        // Preservar capas base y actualizar radio, marcador inicial/GPS y comercios filtrados
         mapView.overlays.removeAll { it is Marker || it is Polygon }
 
-        val centerPoint = selectedLocality.latLng.toOsmGeoPoint()
+        val centerPoint = (userGpsCoordinate?.takeIf { selectedLocality.isUserLocation } ?: selectedLocality.latLng).toOsmGeoPoint()
         val nearbyZoneOverlay =
           Polygon(mapView).apply {
             points = Polygon.pointsAsCircle(centerPoint, selectedLocality.radiusMeters.coerceAtMost(5000.0))
@@ -337,7 +421,6 @@ fun DirectoryMapCanvas(
           }
         mapView.overlays.add(nearbyZoneOverlay)
 
-        // Marcador inicial centrado en Neuquén / localidad activa para referencia de comercios cercanos
         val initialCenterMarker =
           Marker(mapView).apply {
             id = "initial_neuquen_marker"
@@ -391,7 +474,7 @@ fun DirectoryMapCanvas(
             .testTag("map_base_layer_badge"),
       ) {
         Text(
-          text = stringResource(R.string.map_base_layer_label),
+          text = "${stringResource(R.string.map_base_layer_label)} • ${businesses.size} pines",
           style = MaterialTheme.typography.labelSmall,
           color = MaterialTheme.colorScheme.onSurface,
           modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -419,6 +502,37 @@ fun DirectoryMapCanvas(
         Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(6.dp))
         Text(stringResource(R.string.search_this_area))
+      }
+    }
+
+    // Botón flotante para centrar el mapa en la posición GPS actual usando Google Location API
+    if (!isCompactPreview && onRequestMyLocation != null) {
+      val fabBottomPadding by
+        animateDpAsState(
+          targetValue = if (pinnedBusiness != null) 216.dp else 20.dp,
+          label = "gps_fab_bottom_padding",
+        )
+      FloatingActionButton(
+        onClick = onRequestMyLocation,
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+        modifier =
+          Modifier.align(Alignment.BottomEnd)
+            .padding(end = 16.dp, bottom = fabBottomPadding)
+            .testTag("map_gps_fab"),
+      ) {
+        if (isResolvingLocation) {
+          CircularProgressIndicator(
+            modifier = Modifier.size(22.dp),
+            color = MaterialTheme.colorScheme.onPrimary,
+            strokeWidth = 2.dp,
+          )
+        } else {
+          Icon(
+            imageVector = Icons.Rounded.MyLocation,
+            contentDescription = stringResource(R.string.map_gps_center_cd),
+          )
+        }
       }
     }
 

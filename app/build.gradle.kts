@@ -106,7 +106,7 @@ dependencies {
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
-  implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+  // implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
   implementation(libs.firebase.firestore)
 
   implementation(libs.firebase.auth)

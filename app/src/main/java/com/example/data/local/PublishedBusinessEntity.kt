@@ -23,12 +23,16 @@ data class PublishedBusinessEntity(
   val isOpenNow: Boolean,
   val hasDelivery: Boolean,
   val updatedAt: Long = System.currentTimeMillis(),
+  val ownerUserId: String = "",
+  val firestoreDocId: String = "",
+  val createdAtMillis: Long = System.currentTimeMillis(),
 ) {
   fun toDirectoryBusiness(distanceMeters: Float? = null): DirectoryBusiness {
     val category = DirectoryCategories.findById(categoryId)
     val locality = PatagonianLocalities.findById(localityId)
+    val resolvedId = firestoreDocId.ifBlank { "local_$id" }
     return DirectoryBusiness(
-      id = "local_$id",
+      id = resolvedId,
       name = name,
       categoryId = category.id,
       categoryName = category.name,
@@ -48,6 +52,9 @@ data class PublishedBusinessEntity(
       source = BusinessSource.USER_PUBLISHED,
       distanceMeters = distanceMeters,
       markerColorArgb = category.markerColorArgb,
+      ownerUserId = ownerUserId.ifBlank { null },
+      firestoreDocId = firestoreDocId.ifBlank { null },
+      createdAtMillis = createdAtMillis,
     )
   }
 }

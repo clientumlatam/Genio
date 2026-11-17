@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import com.example.data.local.PublishedBusinessEntity
 import com.example.domain.model.BusinessCategory
+import com.example.domain.model.BusinessReview
 import com.example.domain.model.BusinessSource
 import com.example.domain.model.CategorySector
 import com.example.domain.model.DirectoryBusiness
@@ -14,17 +15,18 @@ import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.IgnoreExtraProperties
+import com.google.firebase.firestore.PropertyName
 import com.google.firebase.firestore.ServerTimestamp
 
 /**
- * Nombres canónicos de colecciones Firestore para Guía Genio.
- * Se mantienen centralizados para garantizar consistencia entre modelos,
- * repositorios y reglas de seguridad.
+ * Nombres canónicos de colecciones y subcolecciones Firestore para Guía Genio.
  */
 object FirestoreCollections {
   const val CATEGORIES = "categories"
   const val BUSINESSES = "businesses"
+  const val REVIEWS = "reviews"
   const val USERS = "users"
+  const val FAVORITES = "favorites"
 }
 
 /**
@@ -43,6 +45,8 @@ data class FirestoreCategory(
   val markerColorArgb: Long = 0xFF1546A6L,
   val osmFilterClauses: List<String> = emptyList(),
   val displayOrder: Long = 0L,
+  @get:PropertyName("isActive")
+  @PropertyName("isActive")
   val isActive: Boolean = true,
   @ServerTimestamp val createdAt: Timestamp? = null,
   @ServerTimestamp val updatedAt: Timestamp? = null,
@@ -67,10 +71,6 @@ data class FirestoreCategory(
     )
   }
 
-  /**
-   * Serializa el rubro a un Map apto para Firestore, omitiendo `id` (gestionado por `@DocumentId`)
-   * y filtrando nulos para cumplir con validaciones estrictas de reglas.
-   */
   fun toMap(isCreate: Boolean = true): Map<String, Any> {
     val raw =
       mutableMapOf<String, Any?>(
@@ -114,7 +114,10 @@ data class FirestoreCategory(
     }
 
     fun fromSnapshot(snapshot: DocumentSnapshot): FirestoreCategory? =
-      snapshot.toObject(FirestoreCategory::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+      snapshot.toObject(
+        FirestoreCategory::class.java,
+        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE,
+      )
   }
 }
 
@@ -140,10 +143,14 @@ data class FirestoreBusinessListing(
   val description: String? = null,
   val openingHoursRaw: String? = null,
   val openingHoursSummary: List<String> = emptyList(),
+  @get:PropertyName("isOpenNow")
+  @PropertyName("isOpenNow")
   val isOpenNow: Boolean? = null,
   val hasDelivery: Boolean = false,
   val source: String = "user_published",
   val markerColorArgb: Long = 0xFF1546A6L,
+  @get:PropertyName("isActive")
+  @PropertyName("isActive")
   val isActive: Boolean = true,
   @ServerTimestamp val createdAt: Timestamp? = null,
   @ServerTimestamp val updatedAt: Timestamp? = null,
@@ -187,13 +194,12 @@ data class FirestoreBusinessListing(
       source = resolvedSource,
       distanceMeters = distanceMeters,
       markerColorArgb = resolvedColor,
+      ownerUserId = userId.takeIf { it.isNotBlank() },
+      firestoreDocId = id.takeIf { it.isNotBlank() },
+      createdAtMillis = createdAt?.toDate()?.time,
     )
   }
 
-  /**
-   * Serializa el comercio a un Map seguro para escrituras en Firestore.
-   * Excluye `id` (`@DocumentId`), usa `FieldValue.serverTimestamp()` y filtra claves nulas.
-   */
   fun toMap(ownerUid: String, isCreate: Boolean = true): Map<String, Any> {
     val raw =
       mutableMapOf<String, Any?>(
@@ -231,7 +237,7 @@ data class FirestoreBusinessListing(
       localityId: String = PatagonianLocalities.NeuquenCapital.id,
     ): FirestoreBusinessListing =
       FirestoreBusinessListing(
-        id = business.id,
+        id = business.firestoreDocId ?: business.id,
         userId = userId,
         name = business.name,
         categoryId = business.categoryId,
@@ -266,8 +272,8 @@ data class FirestoreBusinessListing(
       val category = DirectoryCategories.findById(entity.categoryId)
       val locality = PatagonianLocalities.findById(entity.localityId)
       return FirestoreBusinessListing(
-        id = if (entity.id > 0L) "local_${entity.id}" else "",
-        userId = userId,
+        id = entity.firestoreDocId.ifBlank { if (entity.id > 0L) "local_${entity.id}" else "" },
+        userId = entity.ownerUserId.ifBlank { userId },
         name = entity.name,
         categoryId = category.id,
         categoryName = category.name,
@@ -293,6 +299,172 @@ data class FirestoreBusinessListing(
     fun fromSnapshot(snapshot: DocumentSnapshot): FirestoreBusinessListing? =
       snapshot.toObject(
         FirestoreBusinessListing::class.java,
+        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE,
+      )
+  }
+}
+
+/**
+ * Documento Firestore para reseñas y calificaciones con estrellas en
+ * `businesses/{businessId}/reviews/{reviewId}`.
+ */
+@IgnoreExtraProperties
+data class FirestoreReview(
+  @DocumentId val id: String = "",
+  val businessId: String = "",
+  val userId: String = "",
+  val authorName: String = "",
+  val rating: Long = 5L,
+  val comment: String = "",
+  @ServerTimestamp val createdAt: Timestamp? = null,
+  @ServerTimestamp val updatedAt: Timestamp? = null,
+) {
+  fun toDomain(): BusinessReview =
+    BusinessReview(
+      id = id,
+      businessId = businessId,
+      userId = userId,
+      authorName = authorName.ifBlank { "Usuario" },
+      rating = rating.toInt().coerceIn(1, 5),
+      comment = comment,
+      createdAtMillis = createdAt?.toDate()?.time,
+    )
+
+  fun toMap(ownerUid: String, isCreate: Boolean = true): Map<String, Any> {
+    val raw =
+      mutableMapOf<String, Any?>(
+        "businessId" to businessId.trim(),
+        "userId" to ownerUid,
+        "authorName" to authorName.trim().ifBlank { "Usuario" }.take(80),
+        "rating" to rating.coerceIn(1L, 5L),
+        "comment" to comment.trim().take(600),
+        "createdAt" to if (isCreate || createdAt == null) FieldValue.serverTimestamp() else createdAt,
+        "updatedAt" to FieldValue.serverTimestamp(),
+      )
+    @Suppress("UNCHECKED_CAST")
+    return raw.filterValues { it != null } as Map<String, Any>
+  }
+
+  companion object {
+    fun fromSnapshot(snapshot: DocumentSnapshot): FirestoreReview? =
+      snapshot.toObject(
+        FirestoreReview::class.java,
+        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE,
+      )
+  }
+}
+
+/**
+ * Documento Firestore para comercios favoritos en `users/{userId}/favorites/{businessId}`.
+ */
+@IgnoreExtraProperties
+data class FirestoreFavorite(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val businessId: String = "",
+  val name: String = "",
+  val categoryId: String = "",
+  val categoryName: String = "",
+  val localityName: String = "",
+  val address: String = "",
+  val latitude: Double = PatagonianLocalities.NeuquenCapital.latitude,
+  val longitude: Double = PatagonianLocalities.NeuquenCapital.longitude,
+  val phoneNumber: String? = null,
+  val whatsappNumber: String? = null,
+  val websiteUri: String? = null,
+  val description: String? = null,
+  val hasDelivery: Boolean = false,
+  val source: String = "openstreetmap",
+  val markerColorArgb: Long = 0xFF1546A6L,
+  val ownerUserId: String? = null,
+  @ServerTimestamp val createdAt: Timestamp? = null,
+  @ServerTimestamp val updatedAt: Timestamp? = null,
+) {
+  fun toDirectoryBusiness(): DirectoryBusiness {
+    val category = DirectoryCategories.findById(categoryId)
+    val resolvedSource =
+      if (source.equals("user_published", ignoreCase = true)) {
+        BusinessSource.USER_PUBLISHED
+      } else {
+        BusinessSource.OPENSTREETMAP
+      }
+    val resolvedColor =
+      if (markerColorArgb != 0L) markerColorArgb.toInt() else category.markerColorArgb
+    return DirectoryBusiness(
+      id = businessId.ifBlank { id },
+      name = name,
+      categoryId = categoryId.ifBlank { category.id },
+      categoryName = categoryName.ifBlank { category.name },
+      localityName = localityName.ifBlank { PatagonianLocalities.NeuquenCapital.name },
+      address = address,
+      latitude = latitude,
+      longitude = longitude,
+      phoneNumber = phoneNumber?.takeIf { it.isNotBlank() },
+      whatsappNumber = whatsappNumber?.takeIf { it.isNotBlank() },
+      websiteUri = websiteUri?.takeIf { it.isNotBlank() },
+      description = description?.takeIf { it.isNotBlank() },
+      hasDelivery = hasDelivery,
+      source = resolvedSource,
+      markerColorArgb = resolvedColor,
+      ownerUserId = ownerUserId?.takeIf { it.isNotBlank() },
+      firestoreDocId = businessId.takeIf { it.isNotBlank() },
+    )
+  }
+
+  fun toMap(ownerUid: String, isCreate: Boolean = true): Map<String, Any> {
+    val raw =
+      mutableMapOf<String, Any?>(
+        "userId" to ownerUid,
+        "businessId" to businessId.trim(),
+        "name" to name.trim(),
+        "categoryId" to categoryId,
+        "categoryName" to categoryName.trim(),
+        "localityName" to localityName.trim(),
+        "address" to address.trim(),
+        "latitude" to latitude,
+        "longitude" to longitude,
+        "phoneNumber" to phoneNumber?.trim()?.takeIf { it.isNotEmpty() },
+        "whatsappNumber" to whatsappNumber?.trim()?.takeIf { it.isNotEmpty() },
+        "websiteUri" to websiteUri?.trim()?.takeIf { it.isNotEmpty() },
+        "description" to description?.trim()?.takeIf { it.isNotEmpty() },
+        "hasDelivery" to hasDelivery,
+        "source" to source.lowercase(),
+        "markerColorArgb" to markerColorArgb,
+        "ownerUserId" to ownerUserId?.takeIf { it.isNotBlank() },
+        "createdAt" to if (isCreate || createdAt == null) FieldValue.serverTimestamp() else createdAt,
+        "updatedAt" to FieldValue.serverTimestamp(),
+      )
+    @Suppress("UNCHECKED_CAST")
+    return raw.filterValues { it != null } as Map<String, Any>
+  }
+
+  companion object {
+    fun fromDirectoryBusiness(business: DirectoryBusiness, userId: String): FirestoreFavorite =
+      FirestoreFavorite(
+        id = business.id,
+        userId = userId,
+        businessId = business.id,
+        name = business.name,
+        categoryId = business.categoryId,
+        categoryName = business.categoryName,
+        localityName = business.localityName,
+        address = business.address,
+        latitude = business.latitude,
+        longitude = business.longitude,
+        phoneNumber = business.phoneNumber,
+        whatsappNumber = business.whatsappNumber,
+        websiteUri = business.websiteUri,
+        description = business.description,
+        hasDelivery = business.hasDelivery,
+        source =
+          if (business.source == BusinessSource.USER_PUBLISHED) "user_published" else "openstreetmap",
+        markerColorArgb = business.markerColorArgb.toLong() and 0xFFFFFFFFL,
+        ownerUserId = business.ownerUserId,
+      )
+
+    fun fromSnapshot(snapshot: DocumentSnapshot): FirestoreFavorite? =
+      snapshot.toObject(
+        FirestoreFavorite::class.java,
         DocumentSnapshot.ServerTimestampBehavior.ESTIMATE,
       )
   }

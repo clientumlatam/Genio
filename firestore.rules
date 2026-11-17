@@ -1,0 +1,185 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all rule
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidBusiness(data) {
+      return data.keys().hasAll([
+          'userId', 'name', 'categoryId', 'categoryName', 'localityId',
+          'localityName', 'address', 'latitude', 'longitude', 'isActive',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'name', 'categoryId', 'categoryName', 'localityId',
+          'localityName', 'address', 'latitude', 'longitude', 'phoneNumber',
+          'whatsappNumber', 'websiteUri', 'description', 'openingHoursRaw',
+          'openingHoursSummary', 'isOpenNow', 'hasDelivery', 'source',
+          'markerColorArgb', 'isActive', 'createdAt', 'updatedAt'
+        ])
+        && isValidString(data.userId, 1, 128)
+        && isValidString(data.name, 2, 120)
+        && isValidString(data.categoryId, 2, 64)
+        && isValidString(data.categoryName, 2, 80)
+        && isValidString(data.localityId, 2, 64)
+        && isValidString(data.localityName, 2, 80)
+        && isValidString(data.address, 2, 160)
+        && data.latitude is number && data.latitude >= -90.0 && data.latitude <= 90.0
+        && data.longitude is number && data.longitude >= -180.0 && data.longitude <= 180.0
+        && (!('phoneNumber' in data) || isValidString(data.phoneNumber, 1, 40))
+        && (!('whatsappNumber' in data) || isValidString(data.whatsappNumber, 1, 40))
+        && (!('websiteUri' in data) || isValidString(data.websiteUri, 1, 200))
+        && (!('description' in data) || isValidString(data.description, 1, 800))
+        && (!('isOpenNow' in data) || data.isOpenNow is bool)
+        && (!('hasDelivery' in data) || data.hasDelivery is bool)
+        && data.isActive is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidReview(data) {
+      return data.keys().hasAll([
+          'businessId', 'userId', 'authorName', 'rating', 'comment', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'businessId', 'userId', 'authorName', 'rating', 'comment', 'createdAt', 'updatedAt'
+        ])
+        && isValidString(data.businessId, 1, 128)
+        && isValidString(data.userId, 1, 128)
+        && isValidString(data.authorName, 1, 80)
+        && data.rating is int && data.rating >= 1 && data.rating <= 5
+        && isValidString(data.comment, 1, 600)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFavorite(data, userId) {
+      return data.keys().hasAll([
+          'userId', 'businessId', 'name', 'categoryId', 'categoryName',
+          'localityName', 'address', 'latitude', 'longitude', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'businessId', 'name', 'categoryId', 'categoryName',
+          'localityName', 'address', 'latitude', 'longitude', 'phoneNumber',
+          'whatsappNumber', 'websiteUri', 'description', 'hasDelivery',
+          'source', 'markerColorArgb', 'ownerUserId', 'createdAt', 'updatedAt'
+        ])
+        && data.userId == userId
+        && isValidString(data.businessId, 1, 160)
+        && isValidString(data.name, 1, 160)
+        && isValidString(data.categoryId, 1, 64)
+        && data.latitude is number
+        && data.longitude is number
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['userId', 'displayName', 'preferredLocalityId', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'displayName', 'preferredLocalityId', 'favoriteBusinessIds', 'createdAt', 'updatedAt'])
+        && data.userId == userId
+        && isValidString(data.displayName, 2, 80)
+        && isValidString(data.preferredLocalityId, 2, 64)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /categories/{categoryId} {
+      allow get, list: if true;
+      allow write: if false;
+    }
+
+    match /businesses/{businessId} {
+      // Directory listings are readable so users browsing the map/directory can view businesses
+      allow get, list: if existing().isActive == true || (isSignedIn() && existing().userId == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && incoming().userId == request.auth.uid
+        && isValidBusiness(incoming())
+        && incoming().createdAt <= request.time
+        && incoming().updatedAt <= request.time;
+
+      allow update: if isSignedIn()
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt <= request.time
+        && isValidBusiness(incoming());
+
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+
+      match /reviews/{reviewId} {
+        allow get, list: if true;
+
+        allow create: if isSignedIn()
+          && incoming().userId == request.auth.uid
+          && incoming().businessId == businessId
+          && isValidReview(incoming())
+          && incoming().createdAt <= request.time
+          && incoming().updatedAt <= request.time;
+
+        allow update: if isSignedIn()
+          && existing().userId == request.auth.uid
+          && incoming().userId == existing().userId
+          && incoming().businessId == existing().businessId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt <= request.time
+          && isValidReview(incoming());
+
+        allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+      }
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt <= request.time
+        && incoming().updatedAt <= request.time;
+      allow update: if isOwner(userId)
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt <= request.time
+        && isValidUserProfile(incoming(), userId);
+      allow delete: if isOwner(userId);
+
+      match /favorites/{businessId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidFavorite(incoming(), userId)
+          && incoming().createdAt <= request.time
+          && incoming().updatedAt <= request.time;
+        allow update: if isOwner(userId)
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt <= request.time
+          && isValidFavorite(incoming(), userId);
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}

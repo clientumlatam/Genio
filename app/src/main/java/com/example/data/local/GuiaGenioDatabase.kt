@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     FavoriteBusinessEntity::class,
     OsmCacheEntity::class,
   ],
-  version = 2,
+  version = 3,
   exportSchema = false,
 )
 abstract class GuiaGenioDatabase : RoomDatabase() {
@@ -38,6 +38,21 @@ abstract class GuiaGenioDatabase : RoomDatabase() {
         }
       }
 
+    private val MIGRATION_2_3 =
+      object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+          db.execSQL(
+            "ALTER TABLE `published_businesses` ADD COLUMN `ownerUserId` TEXT NOT NULL DEFAULT ''"
+          )
+          db.execSQL(
+            "ALTER TABLE `published_businesses` ADD COLUMN `firestoreDocId` TEXT NOT NULL DEFAULT ''"
+          )
+          db.execSQL(
+            "ALTER TABLE `published_businesses` ADD COLUMN `createdAtMillis` INTEGER NOT NULL DEFAULT 0"
+          )
+        }
+      }
+
     fun getInstance(context: Context): GuiaGenioDatabase {
       return INSTANCE
         ?: synchronized(this) {
@@ -47,7 +62,8 @@ abstract class GuiaGenioDatabase : RoomDatabase() {
                 GuiaGenioDatabase::class.java,
                 "guia_genio.db",
               )
-              .addMigrations(MIGRATION_1_2)
+              .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+              .fallbackToDestructiveMigration(dropAllTables = true)
               .build()
               .also { INSTANCE = it }
         }

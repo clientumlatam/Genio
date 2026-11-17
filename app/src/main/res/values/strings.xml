@@ -5,10 +5,13 @@
     <string name="nav_explore">Explorar</string>
     <string name="nav_map">Mapa</string>
     <string name="nav_categories">Rubros</string>
-    <string name="nav_my_businesses">Mis Comercios</string>
+    <string name="nav_favorites">Favoritos</string>
+    <string name="nav_my_businesses">Comercios</string>
     <string name="nav_ai_assistant">Genio IA</string>
 
     <string name="search_placeholder">Buscar comercio o rubro…</string>
+    <string name="map_search_placeholder">Filtrar por comercio o rubro en el mapa…</string>
+    <string name="map_gps_center_cd">Centrar mapa en mi posición GPS</string>
     <string name="autocomplete_categories_title">Rubros sugeridos</string>
     <string name="autocomplete_places_title">Lugares en OpenStreetMap</string>
     <string name="autocomplete_filter_category">Filtrar rubro</string>
@@ -53,8 +56,23 @@
     <string name="my_businesses_title">Mis Comercios</string>
     <string name="my_businesses_subtitle">Publicá tu negocio o servicio profesional y mostralo en el mapa del Alto Valle.</string>
     <string name="my_businesses_empty_title">Todavía no publicaste comercios</string>
-    <string name="my_businesses_empty_body">Tocá el botón + para cargar tu primer comercio, rubro, WhatsApp y pin en el mapa.</string>
-    <string name="local_storage_notice">Tus comercios se guardan en el dispositivo y quedan asociados a tu perfil de dueño autenticado.</string>
+    <string name="my_businesses_empty_body">Tocá el botón + para cargar tu primer comercio, rubro, descripción, teléfono y pin en el mapa.</string>
+    <string name="local_storage_notice">Tus comercios se vinculan a tu cuenta de Google y se sincronizan con Firestore.</string>
+
+    <string name="favorites_title">Mis Favoritos</string>
+    <string name="favorites_subtitle">Tu lista personalizada de comercios y servicios guardados en Firestore.</string>
+    <string name="favorites_empty_title">Todavía no guardaste favoritos</string>
+    <string name="favorites_empty_body">Tocá el ícono de marcador en cualquier comercio para guardarlo y acceder rápido desde acá.</string>
+    <string name="favorites_sign_in_title">Guardá tus comercios favoritos</string>
+    <string name="favorites_sign_in_body">Iniciá sesión con Google para guardar comercios en tu lista personalizada en Firestore.</string>
+    <string name="favorites_explore_cta">Explorar comercios</string>
+
+    <string name="reviews_section_title">Reseñas y calificación</string>
+    <string name="reviews_empty">Todavía no hay reseñas. ¡Sé el primero en calificar este comercio!</string>
+    <string name="reviews_comment_label">Escribí tu comentario</string>
+    <string name="reviews_submit">Publicar reseña</string>
+    <string name="reviews_sign_in_prompt">Iniciá sesión con Google para dejar una calificación con estrellas y comentario.</string>
+    <string name="cd_star_rating">Calificar con %1$d estrellas</string>
 
     <string name="auth_owner_gate_title">Acceso para Dueños de Comercios</string>
     <string name="auth_owner_gate_subtitle">Iniciá sesión con Google mediante Credential Manager para gestionar tu perfil comercial, publicar locales y actualizar tus horarios en Neuquén y el Alto Valle.</string>
@@ -64,7 +82,7 @@
     <string name="auth_profile_title">Perfil de dueño de comercio</string>
     <string name="auth_profile_name_label">Nombre público o razón social</string>
     <string name="auth_profile_save">Guardar perfil</string>
-    <string name="auth_firebase_pending_notice">Para completar el inicio de sesión en vivo con Google, agregá el archivo google-services.json de tu proyecto Firebase en app/.</string>
+    <string name="auth_firebase_pending_notice">Para sincronizar en vivo con Google Sign-In y Firestore, agregá el archivo google-services.json de tu proyecto Firebase en app/.</string>
 
     <string name="map_base_layer_label">Capa base: OpenStreetMap</string>
     <string name="map_initial_marker_title">Neuquén Capital</string>

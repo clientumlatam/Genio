@@ -11,6 +11,9 @@ interface BusinessDao {
   @Query("SELECT * FROM published_businesses ORDER BY updatedAt DESC")
   fun observePublishedBusinesses(): Flow<List<PublishedBusinessEntity>>
 
+  @Query("SELECT * FROM published_businesses WHERE firestoreDocId = :docId LIMIT 1")
+  suspend fun findByFirestoreDocId(docId: String): PublishedBusinessEntity?
+
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun upsertPublishedBusiness(entity: PublishedBusinessEntity): Long
 

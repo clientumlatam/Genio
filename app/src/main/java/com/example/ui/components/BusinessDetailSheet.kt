@@ -26,13 +26,19 @@ import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.DeliveryDining
 import androidx.compose.material.icons.rounded.Directions
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -41,10 +47,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,21 +69,46 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.domain.model.BusinessReview
 import com.example.domain.model.BusinessSource
 import com.example.domain.model.DirectoryBusiness
 import com.example.domain.model.DirectoryCategories
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun BusinessDetailSheet(
   business: DirectoryBusiness,
   isFavorite: Boolean,
+  currentUserId: String? = null,
+  reviews: List<BusinessReview> = emptyList(),
+  isSubmittingReview: Boolean = false,
+  reviewFeedback: String? = null,
   onToggleFavorite: () -> Unit,
+  onEditBusiness: ((DirectoryBusiness) -> Unit)? = null,
+  onSubmitReview: (Int, String) -> Unit = { _, _ -> },
+  onSignInRequest: () -> Unit = {},
   onDismiss: () -> Unit,
 ) {
   val context = LocalContext.current
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val category = DirectoryCategories.findById(business.categoryId)
+
+  val isOwner =
+    currentUserId != null &&
+      !business.ownerUserId.isNullOrBlank() &&
+      business.ownerUserId == currentUserId
+
+  var selectedRating by remember(business.id) { mutableIntStateOf(5) }
+  var reviewComment by remember(business.id) { mutableStateOf("") }
+
+  val averageRating =
+    remember(reviews) {
+      if (reviews.isEmpty()) null
+      else reviews.map { it.rating }.average()
+    }
 
   ModalBottomSheet(
     onDismissRequest = onDismiss,
@@ -84,8 +121,9 @@ fun BusinessDetailSheet(
           .verticalScroll(rememberScrollState())
           .padding(horizontal = 20.dp)
           .padding(bottom = 32.dp)
+          .testTag("business_detail_sheet")
     ) {
-      // Category Identity Header (No photos — always rubro emblem/icon)
+      // Category Identity Header
       Box(
         modifier =
           Modifier.fillMaxWidth()
@@ -151,12 +189,46 @@ fun BusinessDetailSheet(
 
       Spacer(modifier = Modifier.height(16.dp))
 
-      Text(
-        text = business.categoryName.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.Bold,
-      )
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+      ) {
+        Text(
+          text = business.categoryName.uppercase(),
+          style = MaterialTheme.typography.labelMedium,
+          color = MaterialTheme.colorScheme.primary,
+          fontWeight = FontWeight.Bold,
+          modifier = Modifier.weight(1f),
+        )
+        if (averageRating != null) {
+          Surface(
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Star,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(16.dp),
+              )
+              Text(
+                text =
+                  String.format(Locale.getDefault(), "%.1f (%d)", averageRating, reviews.size),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+              )
+            }
+          }
+        }
+      }
+
       Spacer(modifier = Modifier.height(4.dp))
       Text(
         text = business.name,
@@ -242,6 +314,23 @@ fun BusinessDetailSheet(
         }
       }
 
+      // Botón Editar visible exclusivamente si el usuario autenticado es el propietario del comercio
+      if (isOwner && onEditBusiness != null) {
+        Spacer(modifier = Modifier.height(14.dp))
+        FilledTonalButton(
+          onClick = { onEditBusiness(business) },
+          modifier = Modifier.fillMaxWidth().height(48.dp).testTag("detail_edit_business_button"),
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.Edit,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+          )
+          Spacer(modifier = Modifier.width(8.dp))
+          Text(stringResource(R.string.action_edit))
+        }
+      }
+
       Spacer(modifier = Modifier.height(16.dp))
 
       // Primary Direct Action Buttons
@@ -261,7 +350,11 @@ fun BusinessDetailSheet(
                 contentColor = MaterialTheme.colorScheme.onTertiary,
               ),
           ) {
-            Icon(Icons.AutoMirrored.Rounded.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(
+              Icons.AutoMirrored.Rounded.Chat,
+              contentDescription = null,
+              modifier = Modifier.size(18.dp),
+            )
             Spacer(modifier = Modifier.width(6.dp))
             Text(stringResource(R.string.action_whatsapp))
           }
@@ -299,7 +392,11 @@ fun BusinessDetailSheet(
               onClick = { BusinessIntents.openWebsite(context, business.websiteUri) },
               modifier = Modifier.weight(1f).height(48.dp).testTag("detail_website_button"),
             ) {
-              Icon(Icons.Rounded.Language, contentDescription = null, modifier = Modifier.size(18.dp))
+              Icon(
+                Icons.Rounded.Language,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+              )
               Spacer(modifier = Modifier.width(6.dp))
               Text(stringResource(R.string.action_website), maxLines = 1)
             }
@@ -386,6 +483,197 @@ fun BusinessDetailSheet(
           )
         }
       }
+
+      // Star-Rating & Comments Section (Firestore)
+      Spacer(modifier = Modifier.height(20.dp))
+      HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+      Spacer(modifier = Modifier.height(16.dp))
+
+      Text(
+        text = stringResource(R.string.reviews_section_title),
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+      )
+
+      Spacer(modifier = Modifier.height(10.dp))
+
+      if (currentUserId != null) {
+        Card(
+          shape = RoundedCornerShape(16.dp),
+          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+          modifier = Modifier.fillMaxWidth(),
+        ) {
+          Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+          ) {
+            Text(
+              text = "Tu calificación:",
+              style = MaterialTheme.typography.labelLarge,
+              color = MaterialTheme.colorScheme.primary,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+              for (star in 1..5) {
+                val filled = star <= selectedRating
+                IconButton(
+                  onClick = { selectedRating = star },
+                  modifier = Modifier.size(48.dp).testTag("review_star_$star"),
+                ) {
+                  Icon(
+                    imageVector =
+                      if (filled) Icons.Rounded.Star else Icons.Rounded.StarOutline,
+                    contentDescription = stringResource(R.string.cd_star_rating, star),
+                    tint =
+                      if (filled) MaterialTheme.colorScheme.secondary
+                      else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(30.dp),
+                  )
+                }
+              }
+            }
+
+            OutlinedTextField(
+              value = reviewComment,
+              onValueChange = { reviewComment = it },
+              label = { Text(stringResource(R.string.reviews_comment_label)) },
+              minLines = 2,
+              maxLines = 4,
+              modifier = Modifier.fillMaxWidth().testTag("review_comment_input"),
+            )
+
+            reviewFeedback?.let { feedback ->
+              Text(
+                text = feedback,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+              )
+            }
+
+            Button(
+              onClick = {
+                if (reviewComment.trim().isNotEmpty()) {
+                  onSubmitReview(selectedRating, reviewComment)
+                  reviewComment = ""
+                }
+              },
+              enabled = !isSubmittingReview && reviewComment.trim().isNotEmpty(),
+              modifier = Modifier.fillMaxWidth().height(48.dp).testTag("submit_review_button"),
+            ) {
+              if (isSubmittingReview) {
+                CircularProgressIndicator(
+                  modifier = Modifier.size(20.dp),
+                  color = MaterialTheme.colorScheme.onPrimary,
+                  strokeWidth = 2.dp,
+                )
+              } else {
+                Text(stringResource(R.string.reviews_submit))
+              }
+            }
+          }
+        }
+      } else {
+        Surface(
+          shape = RoundedCornerShape(14.dp),
+          color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+          modifier = Modifier.fillMaxWidth(),
+        ) {
+          Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            Text(
+              text = stringResource(R.string.reviews_sign_in_prompt),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            OutlinedButton(
+              onClick = onSignInRequest,
+              modifier = Modifier.height(48.dp).testTag("review_sign_in_button"),
+            ) {
+              Text(stringResource(R.string.auth_sign_in_google))
+            }
+          }
+        }
+      }
+
+      Spacer(modifier = Modifier.height(14.dp))
+
+      if (reviews.isEmpty()) {
+        Text(
+          text = stringResource(R.string.reviews_empty),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.testTag("reviews_empty_text"),
+        )
+      } else {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          reviews.forEach { review ->
+            ReviewItemCard(review = review)
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun ReviewItemCard(review: BusinessReview) {
+  val formattedDate =
+    remember(review.createdAtMillis) {
+      review.createdAtMillis?.let { millis ->
+        SimpleDateFormat("dd/MM/yyyy", Locale.forLanguageTag("es-AR")).format(Date(millis))
+      }
+    }
+
+  Card(
+    shape = RoundedCornerShape(14.dp),
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    modifier = Modifier.fillMaxWidth().testTag("review_item_${review.id}"),
+  ) {
+    Column(
+      modifier = Modifier.fillMaxWidth().padding(12.dp),
+      verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(
+          text = review.authorName,
+          style = MaterialTheme.typography.titleSmall,
+          color = MaterialTheme.colorScheme.onSurface,
+        )
+        if (formattedDate != null) {
+          Text(
+            text = formattedDate,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+      }
+
+      Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        for (star in 1..5) {
+          Icon(
+            imageVector =
+              if (star <= review.rating) Icons.Rounded.Star else Icons.Rounded.StarOutline,
+            contentDescription = null,
+            tint =
+              if (star <= review.rating) MaterialTheme.colorScheme.secondary
+              else MaterialTheme.colorScheme.outlineVariant,
+            modifier = Modifier.size(16.dp),
+          )
+        }
+      }
+
+      Text(
+        text = review.comment,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
     }
   }
 }

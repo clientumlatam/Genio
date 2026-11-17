@@ -1,0 +1,108 @@
+{
+  "entities": {
+    "Business": {
+      "title": "Business",
+      "description": "Published or synced business listing in Guía Genio directory.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the business owner." },
+        "name": { "type": "string", "description": "Business name (2-120 chars)." },
+        "categoryId": { "type": "string", "description": "Directory category ID." },
+        "categoryName": { "type": "string", "description": "Category display name." },
+        "localityId": { "type": "string", "description": "Patagonian locality ID." },
+        "localityName": { "type": "string", "description": "Locality display name." },
+        "address": { "type": "string", "description": "Street address." },
+        "latitude": { "type": "number", "description": "Latitude coordinate." },
+        "longitude": { "type": "number", "description": "Longitude coordinate." },
+        "phoneNumber": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "websiteUri": { "type": "string" },
+        "description": { "type": "string" },
+        "openingHoursRaw": { "type": "string" },
+        "openingHoursSummary": { "type": "array", "items": { "type": "string" } },
+        "isOpenNow": { "type": "boolean" },
+        "hasDelivery": { "type": "boolean" },
+        "source": { "type": "string" },
+        "markerColorArgb": { "type": "integer" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "categoryId", "localityId", "address", "latitude", "longitude", "isActive", "createdAt", "updatedAt"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Star rating and comment review for a business.",
+      "type": "object",
+      "properties": {
+        "businessId": { "type": "string" },
+        "userId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "rating": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["businessId", "userId", "authorName", "rating", "comment", "createdAt", "updatedAt"]
+    },
+    "Favorite": {
+      "title": "Favorite",
+      "description": "User-saved favorite business entry.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "businessId": { "type": "string" },
+        "name": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "categoryName": { "type": "string" },
+        "localityName": { "type": "string" },
+        "address": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "phoneNumber": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "websiteUri": { "type": "string" },
+        "description": { "type": "string" },
+        "hasDelivery": { "type": "boolean" },
+        "source": { "type": "string" },
+        "markerColorArgb": { "type": "integer" },
+        "ownerUserId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "businessId", "name", "categoryId", "createdAt", "updatedAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile and locality preferences.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "preferredLocalityId": { "type": "string" },
+        "favoriteBusinessIds": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "displayName", "preferredLocalityId", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/businesses/{businessId}": {
+      "schema": { "$ref": "#/entities/Business" },
+      "description": "Public directory businesses owned and editable by their creator."
+    },
+    "/businesses/{businessId}/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/Review" },
+      "description": "Star ratings and comments left by authenticated users."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Owner/user profile settings."
+    },
+    "/users/{userId}/favorites/{businessId}": {
+      "schema": { "$ref": "#/entities/Favorite" },
+      "description": "Personal favorite businesses saved by the authenticated user."
+    }
+  }
+}

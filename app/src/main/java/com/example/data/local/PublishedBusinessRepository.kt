@@ -8,6 +8,9 @@ class PublishedBusinessRepository(private val dao: BusinessDao) {
   val favoriteIds: Flow<List<String>> = dao.observeFavoriteIds()
   val favorites: Flow<List<FavoriteBusinessEntity>> = dao.observeFavorites()
 
+  suspend fun findByFirestoreDocId(docId: String): PublishedBusinessEntity? =
+    dao.findByFirestoreDocId(docId)
+
   suspend fun saveBusiness(entity: PublishedBusinessEntity): Long =
     dao.upsertPublishedBusiness(entity.copy(updatedAt = System.currentTimeMillis()))
 
