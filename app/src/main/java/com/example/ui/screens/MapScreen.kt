@@ -83,6 +83,7 @@ import com.example.domain.model.GeoPointCoord
 import com.example.domain.model.LocalityRegion
 import com.example.domain.model.PatagonianLocalities
 import com.example.ui.DirectoryUiSnapshot
+import com.example.ui.components.ApprovedBusinessesSearchBar
 import com.example.ui.components.BusinessIntents
 import com.example.ui.components.StatusPill
 import java.io.File
@@ -108,6 +109,9 @@ fun MapScreen(
   resultsState: DirectoryResultsState,
   mapSearchQuery: String,
   filteredBusinesses: List<DirectoryBusiness>,
+  approvedFirestoreBusinesses: List<DirectoryBusiness> = emptyList(),
+  isFirestoreConfigured: Boolean = true,
+  firestoreDisabledMessage: String? = null,
   focusedBusiness: DirectoryBusiness? = null,
   userGpsCoordinate: GeoPointCoord? = null,
   gpsCenterRequestNonce: Int = 0,
@@ -123,48 +127,16 @@ fun MapScreen(
   modifier: Modifier = Modifier,
 ) {
   Column(modifier = modifier.fillMaxSize()) {
-    // Barra de búsqueda superior para filtrar marcadores por nombre o rubro desde Firestore
-    OutlinedTextField(
-      value = mapSearchQuery,
-      onValueChange = onMapSearchQueryChange,
-      placeholder = {
-        Text(
-          text = stringResource(R.string.map_search_placeholder),
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
-      },
-      leadingIcon = {
-        Icon(
-          imageVector = Icons.Rounded.Search,
-          contentDescription = null,
-          tint = MaterialTheme.colorScheme.primary,
-        )
-      },
-      trailingIcon = {
-        if (mapSearchQuery.isNotEmpty()) {
-          IconButton(
-            onClick = { onMapSearchQueryChange("") },
-            modifier = Modifier.size(48.dp).testTag("map_search_clear"),
-          ) {
-            Icon(
-              imageVector = Icons.Rounded.Close,
-              contentDescription = stringResource(R.string.cd_clear_search),
-            )
-          }
-        }
-      },
-      singleLine = true,
-      shape = RoundedCornerShape(28.dp),
-      colors =
-        OutlinedTextFieldDefaults.colors(
-          focusedContainerColor = MaterialTheme.colorScheme.surface,
-          unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-        ),
-      modifier =
-        Modifier.fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 6.dp)
-          .testTag("map_search_bar"),
+    // Barra de búsqueda Material 3 (DockedSearchBar) conectada a Firestore para filtrar comercios aprobados en tiempo real por nombre o categoría
+    ApprovedBusinessesSearchBar(
+      query = mapSearchQuery,
+      onQueryChange = onMapSearchQueryChange,
+      approvedBusinesses = approvedFirestoreBusinesses,
+      onBusinessClick = onBusinessClick,
+      isFirestoreConfigured = isFirestoreConfigured,
+      firestoreDisabledMessage = firestoreDisabledMessage,
+      placeholderText = stringResource(R.string.map_search_placeholder),
+      modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
     )
 
     Row(

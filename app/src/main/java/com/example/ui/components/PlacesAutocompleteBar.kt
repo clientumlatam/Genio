@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -55,6 +56,8 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.places.PlaceAutocompleteSuggestion
 import com.example.domain.model.BusinessCategory
+import com.example.domain.model.DirectoryBusiness
+import com.example.domain.model.DirectoryCategories
 import com.example.ui.AutocompleteUiState
 
 @Composable
@@ -127,10 +130,12 @@ fun PlacesAutocompleteDropdown(
   onSelectPrediction: (PlaceAutocompleteSuggestion) -> Unit,
   onDismiss: () -> Unit,
   modifier: Modifier = Modifier,
+  onSelectApprovedBusiness: (DirectoryBusiness) -> Unit = {},
 ) {
   val focusManager = LocalFocusManager.current
   val hasContent =
     autocompleteState.matchingCategories.isNotEmpty() ||
+      autocompleteState.approvedFirestoreMatches.isNotEmpty() ||
       autocompleteState.placePredictions.isNotEmpty() ||
       autocompleteState.isLoading
 
@@ -239,7 +244,97 @@ fun PlacesAutocompleteDropdown(
           }
         }
 
-        if (autocompleteState.matchingCategories.isNotEmpty() &&
+        if (autocompleteState.approvedFirestoreMatches.isNotEmpty()) {
+          if (autocompleteState.matchingCategories.isNotEmpty()) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+          }
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+          ) {
+            Text(
+              text = stringResource(R.string.autocomplete_approved_title),
+              style = MaterialTheme.typography.labelMedium,
+              color = MaterialTheme.colorScheme.tertiary,
+              fontWeight = FontWeight.Bold,
+            )
+            if (autocompleteState.matchingCategories.isEmpty()) {
+              TextButton(
+                onClick = {
+                  focusManager.clearFocus()
+                  onDismiss()
+                },
+                modifier = Modifier.testTag("dismiss_autocomplete_button"),
+              ) {
+                Text("Cerrar", style = MaterialTheme.typography.labelMedium)
+              }
+            }
+          }
+
+          autocompleteState.approvedFirestoreMatches.forEach { business ->
+            val category = DirectoryCategories.findById(business.categoryId)
+            Row(
+              modifier =
+                Modifier.fillMaxWidth()
+                  .heightIn(min = 52.dp)
+                  .clickable {
+                    focusManager.clearFocus()
+                    onSelectApprovedBusiness(business)
+                  }
+                  .padding(horizontal = 14.dp, vertical = 8.dp)
+                  .testTag("autocomplete_approved_${business.id}"),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+              Box(
+                modifier =
+                  Modifier.size(36.dp)
+                    .clip(CircleShape)
+                    .background(category.accentColor.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+              ) {
+                Icon(
+                  imageVector = category.icon,
+                  contentDescription = null,
+                  tint = category.accentColor,
+                  modifier = Modifier.size(20.dp),
+                )
+              }
+              Column(modifier = Modifier.weight(1f)) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                  Text(
+                    text = business.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                  )
+                  Icon(
+                    imageVector = Icons.Rounded.Verified,
+                    contentDescription = stringResource(R.string.status_approved),
+                    tint = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.size(14.dp),
+                  )
+                }
+                Text(
+                  text = "${business.categoryName} • ${business.localityName}",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
+              }
+            }
+          }
+        }
+
+        if ((autocompleteState.matchingCategories.isNotEmpty() ||
+            autocompleteState.approvedFirestoreMatches.isNotEmpty()) &&
           (autocompleteState.placePredictions.isNotEmpty() || autocompleteState.isLoading)
         ) {
           HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))

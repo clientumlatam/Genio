@@ -205,6 +205,8 @@ fun GuiaGenioApp(
   val mapSearchQuery by directoryViewModel.mapSearchQuery.collectAsStateWithLifecycle()
   val resultsState by directoryViewModel.resultsState.collectAsStateWithLifecycle()
   val mapFilteredBusinesses by directoryViewModel.mapFilteredBusinesses.collectAsStateWithLifecycle()
+  val approvedFirestoreSearchResults by
+    directoryViewModel.approvedFirestoreSearchResults.collectAsStateWithLifecycle()
   val autocompleteState by directoryViewModel.autocompleteState.collectAsStateWithLifecycle()
   val selectedBusiness by directoryViewModel.selectedBusiness.collectAsStateWithLifecycle()
   val focusedMapBusiness by directoryViewModel.focusedMapBusiness.collectAsStateWithLifecycle()
@@ -391,6 +393,8 @@ fun GuiaGenioApp(
                     onBusinessClick = directoryViewModel::openBusinessDetail,
                     onToggleFavorite = directoryViewModel::toggleFavorite,
                     onSearchInArea = directoryViewModel::searchInMapArea,
+                    onSelectApprovedBusiness =
+                      directoryViewModel::selectApprovedAutocompleteBusiness,
                   )
 
                 GuiaGenioTab.MAP ->
@@ -399,6 +403,9 @@ fun GuiaGenioApp(
                     resultsState = resultsState,
                     mapSearchQuery = mapSearchQuery,
                     filteredBusinesses = mapFilteredBusinesses,
+                    approvedFirestoreBusinesses = approvedFirestoreSearchResults,
+                    isFirestoreConfigured = isFirestoreConfigured,
+                    firestoreDisabledMessage = firestoreDisabledMessage,
                     focusedBusiness = focusedMapBusiness,
                     userGpsCoordinate = userGpsCoordinate,
                     gpsCenterRequestNonce = gpsCenterRequestNonce,

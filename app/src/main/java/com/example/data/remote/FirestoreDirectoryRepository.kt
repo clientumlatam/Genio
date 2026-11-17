@@ -5,6 +5,7 @@ import android.util.Log
 import com.example.domain.model.BusinessReview
 import com.example.domain.model.BusinessStatus
 import com.example.domain.model.DirectoryBusiness
+import com.example.domain.model.DirectoryCategories
 import com.example.domain.model.PatagonianLocalities
 import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
@@ -13,6 +14,7 @@ import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import java.text.Normalizer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -21,7 +23,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -148,6 +153,17 @@ class FirestoreDirectoryRepository internal constructor(
       if (error is CancellationException) throw error
       handleFirestoreError(error, OperationType.LIST, path)
       emit(emptyList())
+    }
+  }
+
+  /**
+   * Filtra en tiempo real los comercios aprobados (`status == 'APPROVED'`) de Firestore
+   * por nombre o categoría/rubro conforme cambia [queryFlow], reutilizando el listener activo.
+   */
+  fun observeApprovedBusinesses(queryFlow: Flow<String>): Flow<List<DirectoryBusiness>> {
+    val normalizedQueryFlow = queryFlow.map { it.trim() }.distinctUntilChanged()
+    return combine(observeApprovedBusinesses(), normalizedQueryFlow) { approvedBusinesses, query ->
+      filterApprovedBusinessesByNameOrCategory(approvedBusinesses, query)
     }
   }
 
@@ -426,10 +442,45 @@ class FirestoreDirectoryRepository internal constructor(
     private const val TAG = "FirestoreDirectoryRepo"
     const val FIELD_STATUS = "status"
     val PUBLIC_VISIBLE_STATUS: String = BusinessStatus.APPROVED.name
+    private val DIACRITICS_REGEX = Regex("\\p{InCombiningDiacriticalMarks}+")
 
     fun publicBusinessesQuery(db: FirebaseFirestore): Query =
       db.collection(FirestoreCollections.BUSINESSES)
         .whereEqualTo(FIELD_STATUS, PUBLIC_VISIBLE_STATUS)
+
+    internal fun normalizeSearchText(raw: String): String {
+      val trimmed = raw.trim()
+      if (trimmed.isEmpty()) return ""
+      val decomposed = Normalizer.normalize(trimmed, Normalizer.Form.NFD)
+      return DIACRITICS_REGEX.replace(decomposed, "").lowercase()
+    }
+
+    /**
+     * Filtra únicamente comercios con estado [BusinessStatus.APPROVED] coincidiendo por nombre o
+     * categoría/rubro (insensible a mayúsculas y tildes).
+     */
+    fun filterApprovedBusinessesByNameOrCategory(
+      businesses: List<DirectoryBusiness>,
+      query: String,
+    ): List<DirectoryBusiness> {
+      val approvedOnly = businesses.filter { it.status == BusinessStatus.APPROVED }
+      val normalizedQuery = normalizeSearchText(query)
+      if (normalizedQuery.isEmpty()) return approvedOnly
+
+      val tokens = normalizedQuery.split(Regex("\\s+")).filter { it.isNotEmpty() }
+      return approvedOnly.filter { business ->
+        val category = DirectoryCategories.findById(business.categoryId)
+        val searchableFields =
+          listOf(
+            normalizeSearchText(business.name),
+            normalizeSearchText(business.categoryName),
+            normalizeSearchText(business.categoryId),
+            normalizeSearchText(category.name),
+            normalizeSearchText(category.shortName),
+          )
+        tokens.all { token -> searchableFields.any { field -> field.contains(token) } }
+      }
+    }
 
     fun sanitizeDocId(rawId: String): String =
       rawId.trim().replace("/", "_").replace(" ", "_").take(150)

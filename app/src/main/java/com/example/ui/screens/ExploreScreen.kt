@@ -102,6 +102,7 @@ fun ExploreScreen(
   onToggleFavorite: (DirectoryBusiness) -> Unit,
   onSearchInArea: (GeoPointCoord) -> Unit,
   modifier: Modifier = Modifier,
+  onSelectApprovedBusiness: (DirectoryBusiness) -> Unit = onBusinessClick,
 ) {
   val allCategories = listOf(DirectoryCategories.AllCategory) + DirectoryCategories.items
   var showInlineMapCard by rememberSaveable { mutableStateOf(true) }
@@ -350,6 +351,7 @@ fun ExploreScreen(
           onSelectCategory = onSelectAutocompleteCategory,
           onSelectPrediction = onSelectAutocompletePrediction,
           onDismiss = onDismissAutocomplete,
+          onSelectApprovedBusiness = onSelectApprovedBusiness,
           modifier = Modifier.align(Alignment.TopCenter).zIndex(20f),
         )
       }

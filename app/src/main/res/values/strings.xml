@@ -10,7 +10,12 @@
     <string name="nav_ai_assistant">Genio IA</string>
 
     <string name="search_placeholder">Buscar comercio o rubro…</string>
-    <string name="map_search_placeholder">Filtrar por comercio o rubro en el mapa…</string>
+    <string name="map_search_placeholder">Filtrar comercios aprobados por nombre o rubro…</string>
+    <string name="search_approved_placeholder">Buscar comercios aprobados por nombre o rubro…</string>
+    <string name="search_approved_empty_title">Sin comercios aprobados</string>
+    <string name="search_approved_empty_query">No encontramos comercios aprobados que coincidan con \"%1$s\".</string>
+    <string name="search_approved_empty_catalog">Todavía no hay comercios aprobados disponibles en Firestore.</string>
+    <string name="autocomplete_approved_title">Comercios aprobados en Guía Genio</string>
     <string name="map_gps_center_cd">Centrar mapa en mi posición GPS</string>
     <string name="autocomplete_categories_title">Rubros sugeridos</string>
     <string name="autocomplete_places_title">Lugares en OpenStreetMap</string>

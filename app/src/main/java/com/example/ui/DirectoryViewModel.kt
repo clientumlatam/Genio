@@ -57,6 +57,7 @@ data class AutocompleteUiState(
   val isExpanded: Boolean = false,
   val isLoading: Boolean = false,
   val matchingCategories: List<BusinessCategory> = emptyList(),
+  val approvedFirestoreMatches: List<DirectoryBusiness> = emptyList(),
   val placePredictions: List<PlaceAutocompleteSuggestion> = emptyList(),
 )
 
@@ -137,6 +138,17 @@ class DirectoryViewModel(
   private val firestoreBusinesses: Flow<List<DirectoryBusiness>> =
     firestoreRepository?.observeApprovedBusinesses() ?: flowOf(emptyList())
 
+  private val latestApprovedFirestoreBusinesses: StateFlow<List<DirectoryBusiness>> =
+    firestoreBusinesses.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+
+  /**
+   * Resultados en tiempo real de comercios aprobados (`status == 'APPROVED'`) filtrados
+   * por nombre o categoría/rubro directamente a través de [FirestoreDirectoryRepository].
+   */
+  val approvedFirestoreSearchResults: StateFlow<List<DirectoryBusiness>> =
+    (firestoreRepository?.observeApprovedBusinesses(_mapSearchQuery) ?: flowOf(emptyList()))
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+
   val favoriteBusinesses: StateFlow<List<DirectoryBusiness>> =
     currentUser
       .flatMapLatest { user ->
@@ -188,7 +200,7 @@ class DirectoryViewModel(
 
   /**
    * Comercios mostrados en el mapa tras aplicar la barra de búsqueda del mapa
-   * sobre datos de Firestore y del directorio local/OSM.
+   * sobre datos de Firestore aprobados (`status == 'APPROVED'`) y del directorio local/OSM.
    */
   val mapFilteredBusinesses: StateFlow<List<DirectoryBusiness>> =
     combine(resultsState, firestoreBusinesses, _mapSearchQuery) { state, cloudList, mapQuery ->
@@ -201,9 +213,11 @@ class DirectoryViewModel(
       if (trimmed.isEmpty()) {
         currentList
       } else {
-        // Unificar comercios de Firestore y resultados actuales evitando duplicados para filtrar por nombre o rubro
+        // Unificar comercios aprobados de Firestore y resultados actuales evitando duplicados para filtrar por nombre o rubro
         val mergedById = LinkedHashMap<String, DirectoryBusiness>()
-        cloudList.forEach { mergedById[it.id] = it }
+        cloudList
+          .filter { it.status == BusinessStatus.APPROVED }
+          .forEach { mergedById[it.id] = it }
         currentList.forEach { mergedById.putIfAbsent(it.id, it) }
         filterBusinessesByQuery(mergedById.values.toList(), trimmed)
       }
@@ -249,6 +263,13 @@ class DirectoryViewModel(
     } else {
       triggerPlacesSearch(immediate = true)
     }
+  }
+
+  fun selectApprovedAutocompleteBusiness(business: DirectoryBusiness) {
+    _autocompleteState.value = AutocompleteUiState()
+    customMapCenter = business.latLng
+    _focusedMapBusiness.value = business
+    openBusinessDetail(business)
   }
 
   fun clearFocusedMapBusiness() {
@@ -463,11 +484,18 @@ class DirectoryViewModel(
           it.placesQueryTerm.contains(trimmed, ignoreCase = true)
       }.take(3)
 
+    val approvedMatches =
+      FirestoreDirectoryRepository.filterApprovedBusinessesByNameOrCategory(
+        businesses = latestApprovedFirestoreBusinesses.value,
+        query = trimmed,
+      ).take(4)
+
     _autocompleteState.update {
       it.copy(
         isExpanded = true,
         isLoading = true,
         matchingCategories = matchingCategories,
+        approvedFirestoreMatches = approvedMatches,
       )
     }
 
@@ -476,12 +504,21 @@ class DirectoryViewModel(
         delay(280L)
         val locality = _uiControl.value.selectedLocality
         val result = placesRepository.autocompletePlaces(trimmed, locality)
+        val refreshedApproved =
+          FirestoreDirectoryRepository.filterApprovedBusinessesByNameOrCategory(
+            businesses = latestApprovedFirestoreBusinesses.value,
+            query = trimmed,
+          ).take(4)
         result.fold(
           onSuccess = { predictions ->
             _autocompleteState.update {
               it.copy(
-                isExpanded = matchingCategories.isNotEmpty() || predictions.isNotEmpty(),
+                isExpanded =
+                  matchingCategories.isNotEmpty() ||
+                    refreshedApproved.isNotEmpty() ||
+                    predictions.isNotEmpty(),
                 isLoading = false,
+                approvedFirestoreMatches = refreshedApproved,
                 placePredictions = predictions,
               )
             }
@@ -489,8 +526,9 @@ class DirectoryViewModel(
           onFailure = {
             _autocompleteState.update {
               it.copy(
-                isExpanded = matchingCategories.isNotEmpty(),
+                isExpanded = matchingCategories.isNotEmpty() || refreshedApproved.isNotEmpty(),
                 isLoading = false,
+                approvedFirestoreMatches = refreshedApproved,
                 placePredictions = emptyList(),
               )
             }
