@@ -72,6 +72,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -125,9 +126,75 @@ fun MapScreen(
   onSearchInArea: (GeoPointCoord) -> Unit,
   onRequestMyLocation: () -> Unit,
   modifier: Modifier = Modifier,
+  onRetry: (() -> Unit)? = null,
 ) {
-  Column(modifier = modifier.fillMaxSize()) {
-    // Barra de búsqueda Material 3 (DockedSearchBar) conectada a Firestore para filtrar comercios aprobados en tiempo real por nombre o categoría
+  Box(modifier = modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().padding(top = 68.dp)) {
+      Row(
+        modifier =
+          Modifier.fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        PatagonianLocalities.all.take(7).forEach { locality ->
+          val selected = locality.id == uiControl.selectedLocality.id
+          FilterChip(
+            selected = selected,
+            onClick = { onSelectLocality(locality) },
+            label = { Text(locality.name) },
+            colors =
+              FilterChipDefaults.filterChipColors(
+                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+              ),
+            modifier = Modifier.testTag("map_locality_chip_${locality.id}"),
+          )
+        }
+      }
+
+      Row(
+        modifier =
+          Modifier.fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        FilterChip(
+          selected = uiControl.filters.openNowOnly,
+          onClick = onToggleOpenNow,
+          label = { Text(stringResource(R.string.filter_open_now)) },
+        )
+        FilterChip(
+          selected = uiControl.filters.deliveryOnly,
+          onClick = onToggleDelivery,
+          label = { Text(stringResource(R.string.filter_delivery)) },
+        )
+        FilterChip(
+          selected = uiControl.filters.whatsappOnly,
+          onClick = onToggleWhatsApp,
+          label = { Text(stringResource(R.string.filter_whatsapp)) },
+        )
+      }
+
+      DirectoryMapCanvas(
+        selectedLocality = uiControl.selectedLocality,
+        resultsState = resultsState,
+        businessesOverride = filteredBusinesses,
+        focusedBusiness = focusedBusiness,
+        userGpsCoordinate = userGpsCoordinate,
+        gpsCenterRequestNonce = gpsCenterRequestNonce,
+        isResolvingLocation = uiControl.isResolvingLocation,
+        onFocusedBusinessConsumed = onFocusedBusinessConsumed,
+        onBusinessClick = onBusinessClick,
+        onSearchInArea = onSearchInArea,
+        onRequestMyLocation = onRequestMyLocation,
+        onRetry = onRetry,
+        modifier = Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp),
+      )
+    }
+
+    // Barra de búsqueda Material 3 (DockedSearchBar) conectada a Firestore sobre el mapa sin comprimir su altura
     ApprovedBusinessesSearchBar(
       query = mapSearchQuery,
       onQueryChange = onMapSearchQueryChange,
@@ -136,69 +203,10 @@ fun MapScreen(
       isFirestoreConfigured = isFirestoreConfigured,
       firestoreDisabledMessage = firestoreDisabledMessage,
       placeholderText = stringResource(R.string.map_search_placeholder),
-      modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-    )
-
-    Row(
       modifier =
-        Modifier.fillMaxWidth()
-          .horizontalScroll(rememberScrollState())
-          .padding(horizontal = 16.dp, vertical = 2.dp),
-      horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-      PatagonianLocalities.all.take(7).forEach { locality ->
-        val selected = locality.id == uiControl.selectedLocality.id
-        FilterChip(
-          selected = selected,
-          onClick = { onSelectLocality(locality) },
-          label = { Text(locality.name) },
-          colors =
-            FilterChipDefaults.filterChipColors(
-              selectedContainerColor = MaterialTheme.colorScheme.primary,
-              selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-            ),
-          modifier = Modifier.testTag("map_locality_chip_${locality.id}"),
-        )
-      }
-    }
-
-    Row(
-      modifier =
-        Modifier.fillMaxWidth()
-          .horizontalScroll(rememberScrollState())
-          .padding(horizontal = 16.dp, vertical = 2.dp),
-      horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-      FilterChip(
-        selected = uiControl.filters.openNowOnly,
-        onClick = onToggleOpenNow,
-        label = { Text(stringResource(R.string.filter_open_now)) },
-      )
-      FilterChip(
-        selected = uiControl.filters.deliveryOnly,
-        onClick = onToggleDelivery,
-        label = { Text(stringResource(R.string.filter_delivery)) },
-      )
-      FilterChip(
-        selected = uiControl.filters.whatsappOnly,
-        onClick = onToggleWhatsApp,
-        label = { Text(stringResource(R.string.filter_whatsapp)) },
-      )
-    }
-
-    DirectoryMapCanvas(
-      selectedLocality = uiControl.selectedLocality,
-      resultsState = resultsState,
-      businessesOverride = filteredBusinesses,
-      focusedBusiness = focusedBusiness,
-      userGpsCoordinate = userGpsCoordinate,
-      gpsCenterRequestNonce = gpsCenterRequestNonce,
-      isResolvingLocation = uiControl.isResolvingLocation,
-      onFocusedBusinessConsumed = onFocusedBusinessConsumed,
-      onBusinessClick = onBusinessClick,
-      onSearchInArea = onSearchInArea,
-      onRequestMyLocation = onRequestMyLocation,
-      modifier = Modifier.fillMaxSize().padding(top = 4.dp),
+        Modifier.align(Alignment.TopCenter)
+          .padding(horizontal = 16.dp, vertical = 6.dp)
+          .zIndex(20f),
     )
   }
 }
@@ -218,6 +226,7 @@ fun DirectoryMapCanvas(
   onFocusedBusinessConsumed: () -> Unit = {},
   onRequestMyLocation: (() -> Unit)? = null,
   isCompactPreview: Boolean = false,
+  onRetry: (() -> Unit)? = null,
 ) {
   val context = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
@@ -433,24 +442,84 @@ fun DirectoryMapCanvas(
     )
 
     if (!isCompactPreview) {
-      Card(
-        shape = RoundedCornerShape(50),
-        colors =
-          CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-          ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+      Column(
         modifier =
           Modifier.align(Alignment.TopStart)
-            .padding(start = 12.dp, top = 12.dp)
-            .testTag("map_base_layer_badge"),
+            .padding(start = 12.dp, top = 12.dp, end = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        Text(
-          text = "${stringResource(R.string.map_base_layer_label)} • ${businesses.size} pines",
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurface,
-          modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-        )
+        Card(
+          shape = RoundedCornerShape(50),
+          colors =
+            CardDefaults.cardColors(
+              containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+            ),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+          modifier = Modifier.testTag("map_base_layer_badge"),
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+          ) {
+            if (resultsState is DirectoryResultsState.Loading) {
+              CircularProgressIndicator(
+                modifier = Modifier.size(12.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary,
+              )
+            }
+            Text(
+              text =
+                if (resultsState is DirectoryResultsState.Loading) {
+                  "Buscando comercios en ${selectedLocality.name}…"
+                } else {
+                  "${stringResource(R.string.map_base_layer_label)} • ${businesses.size} pines"
+                },
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurface,
+            )
+          }
+        }
+
+        if (resultsState is DirectoryResultsState.Error && businesses.isEmpty()) {
+          Card(
+            shape = RoundedCornerShape(14.dp),
+            colors =
+              CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f)
+              ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f)),
+            modifier = Modifier.testTag("map_error_banner"),
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+              Text(
+                text = resultsState.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+              )
+              if (onRetry != null) {
+                OutlinedButton(
+                  onClick = onRetry,
+                  contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                  modifier = Modifier.height(36.dp).testTag("map_retry_button"),
+                ) {
+                  Text(
+                    text = stringResource(R.string.action_retry),
+                    style = MaterialTheme.typography.labelSmall,
+                  )
+                }
+              }
+            }
+          }
+        }
       }
     }
 

@@ -418,6 +418,7 @@ fun GuiaGenioApp(
                     onBusinessClick = directoryViewModel::openBusinessDetail,
                     onSearchInArea = directoryViewModel::searchInMapArea,
                     onRequestMyLocation = onRequestMyLocation,
+                    onRetry = directoryViewModel::refreshSearch,
                   )
 
                 GuiaGenioTab.CATEGORIES ->

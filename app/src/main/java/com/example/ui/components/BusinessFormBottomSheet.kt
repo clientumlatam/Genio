@@ -45,16 +45,19 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.R
 import com.example.domain.model.BusinessCategory
 import com.example.domain.model.DirectoryCategories
 import com.example.domain.model.LocalityRegion
 import com.example.domain.model.PatagonianLocalities
 import com.example.ui.BusinessFormState
+import com.example.ui.screens.CARTO_VOYAGER_TILE_SOURCE
 import com.example.ui.screens.createCategoryPinDrawable
 import com.example.ui.screens.ensureOsmConfigured
 import org.osmdroid.events.MapEventsReceiver
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
@@ -81,13 +84,30 @@ fun BusinessFormBottomSheet(
   onSave: () -> Unit,
 ) {
   val context = LocalContext.current
+  val lifecycleOwner = LocalLifecycleOwner.current
   ensureOsmConfigured(context)
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val pinGeoPoint = GeoPoint(formState.latitude, formState.longitude)
   val pickerMapRef = remember { mutableStateOf<MapView?>(null) }
 
-  DisposableEffect(Unit) {
-    onDispose { pickerMapRef.value?.onDetach() }
+  DisposableEffect(lifecycleOwner, pickerMapRef.value) {
+    val view = pickerMapRef.value
+    if (view == null) return@DisposableEffect onDispose {}
+    if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+      view.onResume()
+    }
+    val observer = LifecycleEventObserver { _, event ->
+      when (event) {
+        Lifecycle.Event.ON_RESUME -> view.onResume()
+        Lifecycle.Event.ON_PAUSE -> view.onPause()
+        else -> Unit
+      }
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose {
+      lifecycleOwner.lifecycle.removeObserver(observer)
+      view.onDetach()
+    }
   }
 
   val isEditing = formState.editingId != 0L || !formState.editingFirestoreDocId.isNullOrBlank()
@@ -248,7 +268,9 @@ fun BusinessFormBottomSheet(
             modifier = Modifier.fillMaxSize().testTag("my_business_map_picker"),
             factory = { ctx ->
               MapView(ctx).apply {
-                setTileSource(TileSourceFactory.MAPNIK)
+                setTileSource(CARTO_VOYAGER_TILE_SOURCE)
+                isTilesScaledToDpi = true
+                setUseDataConnection(true)
                 setMultiTouchControls(true)
                 zoomController.setVisibility(CustomZoomButtonsController.Visibility.SHOW_AND_FADEOUT)
                 controller.setZoom(14.5)

@@ -42,8 +42,8 @@ class PlacesRepository(
 ) {
   private val httpClient =
     OkHttpClient.Builder()
-      .connectTimeout(12, TimeUnit.SECONDS)
-      .readTimeout(22, TimeUnit.SECONDS)
+      .connectTimeout(8, TimeUnit.SECONDS)
+      .readTimeout(14, TimeUnit.SECONDS)
       .build()
 
   private val nominatimMutex = Mutex()
@@ -152,7 +152,10 @@ class PlacesRepository(
       }
     }
 
-  /** Consulta comercios reales en Overpass API (por bbox de localidad), con caché en Room TTL 24 h. */
+  /**
+   * Consulta comercios reales en Overpass API (por bbox de localidad), con caché en Room TTL 24 h,
+   * respaldo rápido por Photon OSM y uso de caché previa si no hay red.
+   */
   suspend fun searchBusinesses(
     query: String,
     locality: LocalityRegion,
@@ -163,7 +166,13 @@ class PlacesRepository(
   ): Result<List<DirectoryBusiness>> =
     withContext(Dispatchers.IO) {
       val center = searchCenterOverride ?: locality.latLng
-      val bbox = locality.boundingBox(searchCenterOverride)
+      val effectiveLocality =
+        if (category.id == DirectoryCategories.AllCategory.id && query.isBlank()) {
+          locality.copy(radiusMeters = locality.radiusMeters.coerceAtMost(4500.0))
+        } else {
+          locality
+        }
+      val bbox = effectiveLocality.boundingBox(searchCenterOverride)
       val cacheKey = buildCacheKey(center, category.id, query, deliveryHint)
       val nowMs = clockMs()
 
@@ -198,30 +207,135 @@ class PlacesRepository(
             val elements = root.optJSONArray("elements") ?: JSONArray()
             val parsed = parseOverpassElements(elements, locality, category, center)
 
-            runCatching {
-              businessDao.purgeExpiredCache(nowMs - CACHE_TTL_MS)
-              businessDao.upsertCachedSearch(
-                OsmCacheEntity(
-                  cacheKey = cacheKey,
-                  payloadJson = serializeBusinesses(parsed),
-                  cachedAtMillis = nowMs,
+            if (parsed.isNotEmpty()) {
+              runCatching {
+                businessDao.purgeExpiredCache(nowMs - CACHE_TTL_MS)
+                businessDao.upsertCachedSearch(
+                  OsmCacheEntity(
+                    cacheKey = cacheKey,
+                    payloadJson = serializeBusinesses(parsed),
+                    cachedAtMillis = nowMs,
+                  )
                 )
-              )
-            }
+              }
 
-            val finalResults =
-              if (openNowOnly) parsed.filter { it.isOpenNow == true } else parsed
-            return@withContext Result.success(finalResults)
+              val finalResults =
+                if (openNowOnly) parsed.filter { it.isOpenNow == true } else parsed
+              return@withContext Result.success(finalResults)
+            }
+            lastError = null
+            break
           }
         } catch (e: Exception) {
           lastError = e
         }
       }
 
+      // Respaldo 1: consultar puntos reales OpenStreetMap vía Photon si Overpass agota tiempo, limita o devuelve vacío
+      val photonFallback =
+        fetchPhotonBusinessesFallback(
+          query = query,
+          locality = locality,
+          category = category,
+          center = center,
+        )
+      if (photonFallback.isNotEmpty()) {
+        runCatching {
+          businessDao.upsertCachedSearch(
+            OsmCacheEntity(
+              cacheKey = cacheKey,
+              payloadJson = serializeBusinesses(photonFallback),
+              cachedAtMillis = nowMs,
+            )
+          )
+        }
+        val finalResults =
+          if (openNowOnly) photonFallback.filter { it.isOpenNow == true } else photonFallback
+        return@withContext Result.success(finalResults)
+      }
+
+      // Respaldo 2: devolver resultados previos en Room incluso si expiró el TTL de 24 h
+      if (cachedRow != null) {
+        val restored = deserializeBusinesses(cachedRow.payloadJson, center)
+        val filteredCached =
+          if (openNowOnly) restored.filter { it.isOpenNow == true } else restored
+        return@withContext Result.success(filteredCached)
+      }
+
+      if (lastError == null) {
+        return@withContext Result.success(emptyList())
+      }
+
       Result.failure(
         lastError ?: IllegalStateException("No pudimos consultar comercios en OpenStreetMap.")
       )
     }
+
+  private fun fetchPhotonBusinessesFallback(
+    query: String,
+    locality: LocalityRegion,
+    category: BusinessCategory,
+    center: GeoPointCoord,
+  ): List<DirectoryBusiness> {
+    val searchTerms =
+      if (query.isNotBlank()) {
+        listOf("${query.trim()} ${locality.name}")
+      } else if (category.id == DirectoryCategories.AllCategory.id) {
+        listOf("restaurante ${locality.name}", "farmacia ${locality.name}", "supermercado ${locality.name}")
+      } else {
+        val primaryTerm = category.placesQueryTerm.split(" ").firstOrNull().orEmpty().ifBlank { category.shortName }
+        listOf("$primaryTerm ${locality.name}")
+      }
+
+    val collected = LinkedHashMap<String, DirectoryBusiness>()
+    val maxDistanceMeters = maxOf(locality.radiusMeters * 2.5, 25_000.0).toFloat()
+
+    for (term in searchTerms) {
+      runCatching {
+        val encoded = URLEncoder.encode(term, "UTF-8")
+        val url =
+          "https://photon.komoot.io/api/" +
+            "?q=$encoded" +
+            "&lat=${center.latitude}" +
+            "&lon=${center.longitude}" +
+            "&bbox=-71.70,-40.60,-66.40,-36.80" +
+            "&limit=12" +
+            "&lang=es"
+        val request =
+          Request.Builder()
+            .url(url)
+            .header("User-Agent", USER_AGENT)
+            .header("Accept", "application/json")
+            .get()
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+          if (!response.isSuccessful) return@use
+          val body = response.body?.string().orEmpty()
+          parsePhotonFeatures(body, locality).forEach { suggestion ->
+            val biz = suggestion.business ?: return@forEach
+            val dist = FloatArray(1)
+            Location.distanceBetween(center.latitude, center.longitude, biz.latitude, biz.longitude, dist)
+            if (dist[0] <= maxDistanceMeters) {
+              val adjusted =
+                if (category.id != DirectoryCategories.AllCategory.id && biz.categoryId == DirectoryCategories.AllCategory.id) {
+                  biz.copy(
+                    categoryId = category.id,
+                    categoryName = category.name,
+                    markerColorArgb = category.markerColorArgb,
+                    distanceMeters = dist[0],
+                  )
+                } else {
+                  biz.copy(distanceMeters = dist[0])
+                }
+              collected.putIfAbsent(adjusted.id, adjusted)
+            }
+          }
+        }
+      }
+    }
+
+    return collected.values.sortedBy { it.distanceMeters ?: Float.MAX_VALUE }
+  }
 
   private fun buildCacheKey(
     center: GeoPointCoord,
@@ -240,14 +354,15 @@ class PlacesRepository(
     )
 
   companion object {
-    const val USER_AGENT = "GuiaGenio/1.0"
+    const val USER_AGENT = "GuiaGenio/1.0 (com.aistudio.guiagenio.nqnvma)"
     const val CACHE_TTL_MS = 24L * 60L * 60L * 1000L
     const val NOMINATIM_MIN_INTERVAL_MS = 1050L
 
     private val OVERPASS_ENDPOINTS =
       listOf(
         "https://overpass-api.de/api/interpreter",
-        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
       )
 
     fun buildOverpassBboxQuery(

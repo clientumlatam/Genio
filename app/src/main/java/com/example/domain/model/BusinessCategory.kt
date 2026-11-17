@@ -54,11 +54,9 @@ object DirectoryCategories {
       accentColor = Color(0xFF1546A6),
       osmFilterClauses =
         listOf(
-          """["shop"]""",
-          """["craft"]""",
-          """["office"]""",
+          """["amenity"~"restaurant|cafe|fast_food|bar|pharmacy|clinic|hospital|doctors|bank|fuel"]""",
+          """["shop"~"supermarket|convenience|hardware|doityourself|bakery|car_repair|car_parts|clothes|electronics|chemist"]""",
           """["industrial"]""",
-          """["amenity"~"restaurant|cafe|fast_food|bar|pub|pharmacy|clinic|hospital|doctors|dentist|bank|fuel|school|car_wash"]""",
         ),
     )
 
