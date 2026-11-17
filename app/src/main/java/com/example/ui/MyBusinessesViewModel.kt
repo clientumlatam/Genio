@@ -9,6 +9,7 @@ import com.example.data.auth.AuthUiState
 import com.example.data.local.PublishedBusinessEntity
 import com.example.data.local.PublishedBusinessRepository
 import com.example.data.places.PlacesRepository
+import com.example.data.remote.FirebaseConfigurationSnapshot
 import com.example.data.remote.FirestoreBusinessListing
 import com.example.data.remote.FirestoreConfigStatus
 import com.example.data.remote.FirestoreDirectoryRepository
@@ -55,6 +56,18 @@ class MyBusinessesViewModel(
 
   val authState: StateFlow<AuthUiState> =
     authService?.authState ?: MutableStateFlow(AuthUiState()).asStateFlow()
+
+  val firebaseConfigurationState: StateFlow<FirebaseConfigurationSnapshot> =
+    firestoreRepository?.configurationState
+      ?: MutableStateFlow(
+        FirebaseConfigurationSnapshot(
+          configStatus =
+            FirestoreConfigStatus.Disabled(
+              reason = FirestoreConfigStatus.Disabled.Reason.INIT_FAILED,
+              userMessage = "Repositorio Firestore no disponible en esta instancia.",
+            )
+        )
+      ).asStateFlow()
 
   val isFirestoreConfigured: Boolean
     get() = firestoreRepository?.isConfigured == true

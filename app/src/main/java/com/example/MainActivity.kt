@@ -68,6 +68,7 @@ import com.example.data.local.GuiaGenioDatabase
 import com.example.data.local.PublishedBusinessRepository
 import com.example.data.places.LocationTracker
 import com.example.data.places.PlacesRepository
+import com.example.data.remote.FirebaseConfigurationService
 import com.example.data.remote.FirestoreConfigStatus
 import com.example.data.remote.FirestoreDirectoryRepository
 import com.example.domain.model.DirectoryViewMode
@@ -113,6 +114,7 @@ enum class GuiaGenioTab(
 }
 
 class MainActivity : ComponentActivity() {
+  private lateinit var firebaseConfigService: FirebaseConfigurationService
   private lateinit var authService: AuthService
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -124,8 +126,9 @@ class MainActivity : ComponentActivity() {
     val publishedRepository = PublishedBusinessRepository(database.businessDao())
     val placesRepository = PlacesRepository(appContext)
     val locationTracker = LocationTracker(appContext)
-    val firestoreRepository = FirestoreDirectoryRepository(appContext)
-    authService = AuthService(appContext)
+    firebaseConfigService = FirebaseConfigurationService(appContext)
+    val firestoreRepository = FirestoreDirectoryRepository(firebaseConfigService)
+    authService = AuthService(appContext, firebaseConfigService)
 
     lifecycleScope.launch {
       authService.attemptAutoSignIn(this@MainActivity)
@@ -179,6 +182,9 @@ class MainActivity : ComponentActivity() {
     if (::authService.isInitialized) {
       authService.release()
     }
+    if (::firebaseConfigService.isInitialized) {
+      firebaseConfigService.release()
+    }
   }
 }
 
@@ -213,12 +219,14 @@ fun GuiaGenioApp(
   val uiFeedbackMessage by directoryViewModel.uiFeedbackMessage.collectAsStateWithLifecycle()
 
   val authState by myBusinessesViewModel.authState.collectAsStateWithLifecycle()
+  val firebaseConfigState by
+    myBusinessesViewModel.firebaseConfigurationState.collectAsStateWithLifecycle()
   val myBusinesses by myBusinessesViewModel.publishedBusinesses.collectAsStateWithLifecycle()
   val formState by myBusinessesViewModel.formState.collectAsStateWithLifecycle()
   val myBusinessFeedback by myBusinessesViewModel.feedbackMessage.collectAsStateWithLifecycle()
-  val isFirestoreConfigured = myBusinessesViewModel.isFirestoreConfigured
+  val isFirestoreConfigured = firebaseConfigState.isFirestoreInitialized && firebaseConfigState.configStatus.isConfigured
   val firestoreDisabledMessage =
-    (myBusinessesViewModel.firestoreConfigStatus as? FirestoreConfigStatus.Disabled)?.userMessage
+    (firebaseConfigState.configStatus as? FirestoreConfigStatus.Disabled)?.userMessage
 
   LaunchedEffect(uiFeedbackMessage) {
     val msg = uiFeedbackMessage ?: return@LaunchedEffect

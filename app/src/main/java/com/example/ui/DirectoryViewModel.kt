@@ -12,6 +12,7 @@ import com.example.data.local.PublishedBusinessRepository
 import com.example.data.places.LocationTracker
 import com.example.data.places.PlaceAutocompleteSuggestion
 import com.example.data.places.PlacesRepository
+import com.example.data.remote.FirebaseConfigurationSnapshot
 import com.example.data.remote.FirestoreConfigStatus
 import com.example.data.remote.FirestoreDirectoryRepository
 import com.example.domain.model.BusinessCategory
@@ -104,6 +105,18 @@ class DirectoryViewModel(
 
   private val _uiFeedbackMessage = MutableStateFlow<String?>(null)
   val uiFeedbackMessage: StateFlow<String?> = _uiFeedbackMessage.asStateFlow()
+
+  val firebaseConfigurationState: StateFlow<FirebaseConfigurationSnapshot> =
+    firestoreRepository?.configurationState
+      ?: MutableStateFlow(
+        FirebaseConfigurationSnapshot(
+          configStatus =
+            FirestoreConfigStatus.Disabled(
+              reason = FirestoreConfigStatus.Disabled.Reason.INIT_FAILED,
+              userMessage = "Repositorio Firestore no disponible en esta instancia.",
+            )
+        )
+      ).asStateFlow()
 
   val isFirestoreConfigured: Boolean
     get() = firestoreRepository?.isConfigured == true

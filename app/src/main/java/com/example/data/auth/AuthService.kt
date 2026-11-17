@@ -9,18 +9,16 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
+import com.example.data.remote.FirebaseConfigurationService
 import com.example.domain.model.PatagonianLocalities
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Companion.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-import com.google.firebase.Firebase
-import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
-import com.google.firebase.auth.auth
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,7 +56,11 @@ sealed interface AuthSignInOutcome {
  * Servicio básico de autenticación con Firebase Authentication y Google Sign-In
  * mediante Jetpack Credential Manager para dueños de comercios.
  */
-class AuthService(context: Context) {
+class AuthService(
+  context: Context,
+  private val firebaseConfigService: FirebaseConfigurationService =
+    FirebaseConfigurationService(context.applicationContext ?: context),
+) {
 
   private val appContext = context.applicationContext ?: context
   private val credentialManager = CredentialManager.create(appContext)
@@ -72,14 +74,16 @@ class AuthService(context: Context) {
   val authState: StateFlow<AuthUiState> = _authState.asStateFlow()
 
   init {
-    val diagnostic = checkFirebaseAuthConfiguration()
-    if (diagnostic == null) {
-      val auth = Firebase.auth
+    val diagnostic = firebaseConfigService.inspectAuthConfiguration()
+    val auth = if (diagnostic == null) firebaseConfigService.getFirebaseAuth() else null
+    if (diagnostic == null && auth != null) {
       firebaseAuth = auth
       val listener = FirebaseAuth.AuthStateListener { instance ->
+        val user = instance.currentUser
+        firebaseConfigService.onAuthenticatedUserChanged(user?.uid)
         _authState.update { state ->
           state.copy(
-            currentUser = instance.currentUser?.toOwnerUser(),
+            currentUser = user?.toOwnerUser(),
             isFirebaseConfigured = true,
             firebaseConfigMessage = null,
             isLoading = false,
@@ -88,53 +92,26 @@ class AuthService(context: Context) {
       }
       authListener = listener
       auth.addAuthStateListener(listener)
+      val initialUser = auth.currentUser
+      firebaseConfigService.onAuthenticatedUserChanged(initialUser?.uid)
       _authState.update {
         it.copy(
-          currentUser = auth.currentUser?.toOwnerUser(),
+          currentUser = initialUser?.toOwnerUser(),
           isFirebaseConfigured = true,
           firebaseConfigMessage = null,
         )
       }
     } else {
+      firebaseConfigService.onAuthenticatedUserChanged(null)
       _authState.update {
         it.copy(
           currentUser = null,
           isFirebaseConfigured = false,
-          firebaseConfigMessage = diagnostic,
+          firebaseConfigMessage =
+            diagnostic ?: "No se pudo obtener la instancia de FirebaseAuth.",
         )
       }
     }
-  }
-
-  private fun checkFirebaseAuthConfiguration(): String? {
-    return try {
-      val app =
-        FirebaseApp.getApps(appContext).firstOrNull()
-          ?: FirebaseApp.initializeApp(appContext)
-      if (app == null) {
-        return "Falta app/google-services.json para habilitar Google Sign-In."
-      }
-      val projectId = app.options.projectId?.trim().orEmpty()
-      if (projectId.isBlank() || projectId == "remixed-project-id") {
-        return "google-services.json contiene un projectId de plantilla sin aprovisionar."
-      }
-      if (resolveWebClientId(appContext) == null) {
-        return "Falta el recurso default_web_client_id generado por google-services.json."
-      }
-      null
-    } catch (e: Exception) {
-      Log.w(TAG, "FirebaseApp no inicializado (verificá google-services.json): ${e.message}")
-      "No se pudo inicializar Firebase Auth (${e.localizedMessage ?: "sin detalle"})."
-    }
-  }
-
-  private fun resolveWebClientId(context: Context): String? {
-    val resId =
-      context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
-    if (resId == 0) return null
-    val value = context.getString(resId).trim()
-    if (value.isBlank() || value.contains("placeholder", ignoreCase = true)) return null
-    return value
   }
 
   /**
@@ -144,12 +121,13 @@ class AuthService(context: Context) {
   suspend fun attemptAutoSignIn(activityContext: Context): AuthSignInOutcome {
     val auth = firebaseAuth ?: return AuthSignInOutcome.NoCredentials
     auth.currentUser?.let { existing ->
+      firebaseConfigService.onAuthenticatedUserChanged(existing.uid)
       val mapped = existing.toOwnerUser()
       _authState.update { it.copy(currentUser = mapped, isLoading = false) }
       return AuthSignInOutcome.Success(mapped)
     }
 
-    val clientId = resolveWebClientId(activityContext) ?: return AuthSignInOutcome.NoCredentials
+    val clientId = firebaseConfigService.resolveWebClientId() ?: return AuthSignInOutcome.NoCredentials
     val googleIdOption =
       GetGoogleIdOption.Builder()
         .setFilterByAuthorizedAccounts(true)
@@ -169,6 +147,7 @@ class AuthService(context: Context) {
         val owner =
           authResult.user?.toOwnerUser()
             ?: return AuthSignInOutcome.Error("No se pudo recuperar el perfil de Firebase.")
+        firebaseConfigService.onAuthenticatedUserChanged(owner.uid)
         _authState.update { it.copy(currentUser = owner, isLoading = false, errorMessage = null) }
         AuthSignInOutcome.Success(owner)
       } else {
@@ -189,10 +168,11 @@ class AuthService(context: Context) {
    */
   suspend fun signInWithGoogle(activityContext: Context): AuthSignInOutcome {
     val auth = firebaseAuth
-    val clientId = resolveWebClientId(activityContext)
+    val clientId = firebaseConfigService.resolveWebClientId()
     if (auth == null || clientId == null) {
       val msg =
-        "Falta configurar Firebase (google-services.json / default_web_client_id) para iniciar sesión con Google."
+        firebaseConfigService.inspectAuthConfiguration()
+          ?: "Falta configurar Firebase (google-services.json / default_web_client_id) para iniciar sesión con Google."
       _authState.update { it.copy(isLoading = false, errorMessage = msg) }
       return AuthSignInOutcome.Error(msg)
     }
@@ -213,6 +193,7 @@ class AuthService(context: Context) {
         val owner =
           authResult.user?.toOwnerUser()
             ?: return AuthSignInOutcome.Error("No se obtuvo usuario tras autenticar con Google.")
+        firebaseConfigService.onAuthenticatedUserChanged(owner.uid)
         _authState.update {
           it.copy(
             currentUser = owner,
@@ -293,6 +274,7 @@ class AuthService(context: Context) {
         Log.w(TAG, "No se pudo limpiar el estado de Credential Manager: ${e.message}")
       } finally {
         firebaseAuth?.signOut()
+        firebaseConfigService.onAuthenticatedUserChanged(null)
         _authState.update {
           it.copy(
             currentUser = null,

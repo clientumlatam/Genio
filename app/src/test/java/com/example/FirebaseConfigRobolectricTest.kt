@@ -8,6 +8,7 @@ import com.example.data.local.PublishedBusinessEntity
 import com.example.data.local.PublishedBusinessRepository
 import com.example.data.places.LocationTracker
 import com.example.data.places.PlacesRepository
+import com.example.data.remote.FirebaseConfigurationService
 import com.example.data.remote.FirestoreBusinessListing
 import com.example.data.remote.FirestoreConfigStatus
 import com.example.data.remote.FirestoreDirectoryRepository
@@ -241,5 +242,90 @@ class FirebaseConfigRobolectricTest {
         authService = null,
       )
     assertFalse(dirVm.isFirestoreConfigured)
+  }
+
+  @Test
+  fun `configuration service blocks reading secret resource names and exposes zero api keys`() {
+    assertNull(
+      FirebaseConfigurationService.readNonSecretStringResource(context, "google_api_key")
+    )
+    assertNull(
+      FirebaseConfigurationService.readNonSecretStringResource(context, "firebase_private_secret")
+    )
+    assertNull(
+      FirebaseConfigurationService.readNonSecretStringResource(context, "app_auth_token")
+    )
+
+    FirebaseApp.initializeApp(
+      context,
+      FirebaseOptions.Builder()
+        .setProjectId("guia-genio-prod")
+        .setApplicationId("1:123456:android:abcdef")
+        .setApiKey("AIzaSySensitiveKeyShouldNeverLeak")
+        .build(),
+    )
+
+    val configService =
+      FirebaseConfigurationService(
+        context = context,
+        databaseIdOverride = "guia-genio-db",
+      )
+    val snapshot = configService.configurationState.value
+    assertTrue(snapshot.isFirebaseProjectConfigured)
+    assertEquals("guia-genio-prod", snapshot.projectId)
+    assertEquals("guia-genio-db", snapshot.databaseId)
+    assertFalse(snapshot.toString().contains("AIzaSySensitiveKeyShouldNeverLeak"))
+    configService.release()
+  }
+
+  @Test
+  fun `configuration service initializes authenticated firestore when user is present and resets on sign out`() {
+    FirebaseApp.initializeApp(
+      context,
+      FirebaseOptions.Builder()
+        .setProjectId("guia-genio-prod")
+        .setApplicationId("1:123456:android:abcdef")
+        .setApiKey("AIzaSyTestOnlyNotARealKey123")
+        .build(),
+    )
+
+    var simulatedUid: String? = null
+    val configService =
+      FirebaseConfigurationService(
+        context = context,
+        databaseIdOverride = "guia-genio-db",
+        externalUidProvider = { simulatedUid },
+      )
+
+    // Sin usuario autenticado aún
+    val unauthState = configService.configurationState.value
+    assertTrue(unauthState.isFirestoreInitialized)
+    assertFalse(unauthState.isAuthenticatedUserPresent)
+    assertFalse(unauthState.isAuthenticatedFirestoreReady)
+    assertNull(unauthState.authenticatedUserId)
+
+    // Al estar presente el usuario autenticado, inicializa sesión Firestore nombrada
+    simulatedUid = "owner_uid_neuquen"
+    val authState = configService.onAuthenticatedUserChanged("owner_uid_neuquen")
+    assertTrue(authState.isFirestoreInitialized)
+    assertTrue(authState.isAuthenticatedUserPresent)
+    assertTrue(authState.isAuthenticatedFirestoreReady)
+    assertEquals("owner_uid_neuquen", authState.authenticatedUserId)
+
+    val authResolution = configService.getAuthenticatedFirestore("owner_uid_neuquen")
+    assertNotNull(authResolution.firestore)
+    assertTrue(authResolution.status.isConfigured)
+    assertEquals(
+      "guia-genio-db",
+      (authResolution.status as FirestoreConfigStatus.Ready).databaseId,
+    )
+
+    // Al cerrar sesión, limpia el estado autenticado sin perder validación de proyecto
+    simulatedUid = null
+    val signedOutState = configService.onAuthenticatedUserChanged(null)
+    assertFalse(signedOutState.isAuthenticatedUserPresent)
+    assertFalse(signedOutState.isAuthenticatedFirestoreReady)
+    assertNull(signedOutState.authenticatedUserId)
+    configService.release()
   }
 }
