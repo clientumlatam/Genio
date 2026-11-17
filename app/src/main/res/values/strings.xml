@@ -36,6 +36,10 @@
     <string name="badge_delivery">Delivery</string>
     <string name="badge_whatsapp">WhatsApp</string>
     <string name="badge_published">Publicado en Guía Genio</string>
+    <string name="status_pending">Pendiente de aprobación</string>
+    <string name="status_approved">Aprobado</string>
+    <string name="status_rejected">Rechazado</string>
+    <string name="status_suspended">Suspendido</string>
 
     <string name="action_call">Llamar</string>
     <string name="action_whatsapp">WhatsApp</string>

@@ -3,6 +3,7 @@ package com.example.data.local
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.domain.model.BusinessSource
+import com.example.domain.model.BusinessStatus
 import com.example.domain.model.DirectoryBusiness
 import com.example.domain.model.DirectoryCategories
 import com.example.domain.model.PatagonianLocalities
@@ -26,7 +27,11 @@ data class PublishedBusinessEntity(
   val ownerUserId: String = "",
   val firestoreDocId: String = "",
   val createdAtMillis: Long = System.currentTimeMillis(),
+  val status: String = BusinessStatus.PENDING.name,
 ) {
+  val moderationStatus: BusinessStatus
+    get() = BusinessStatus.fromString(status, BusinessStatus.PENDING)
+
   fun toDirectoryBusiness(distanceMeters: Float? = null): DirectoryBusiness {
     val category = DirectoryCategories.findById(categoryId)
     val locality = PatagonianLocalities.findById(localityId)
@@ -50,6 +55,7 @@ data class PublishedBusinessEntity(
         listOf(if (isOpenNow) "Atendiendo ahora" else "Cerrado temporalmente"),
       hasDelivery = hasDelivery,
       source = BusinessSource.USER_PUBLISHED,
+      status = moderationStatus,
       distanceMeters = distanceMeters,
       markerColorArgb = category.markerColorArgb,
       ownerUserId = ownerUserId.ifBlank { null },

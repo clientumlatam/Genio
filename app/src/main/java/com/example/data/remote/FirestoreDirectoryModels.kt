@@ -6,6 +6,7 @@ import com.example.data.local.PublishedBusinessEntity
 import com.example.domain.model.BusinessCategory
 import com.example.domain.model.BusinessReview
 import com.example.domain.model.BusinessSource
+import com.example.domain.model.BusinessStatus
 import com.example.domain.model.CategorySector
 import com.example.domain.model.DirectoryBusiness
 import com.example.domain.model.DirectoryCategories
@@ -149,12 +150,19 @@ data class FirestoreBusinessListing(
   val hasDelivery: Boolean = false,
   val source: String = "user_published",
   val markerColorArgb: Long = 0xFF1546A6L,
+  val status: String = BusinessStatus.PENDING.name,
   @get:PropertyName("isActive")
   @PropertyName("isActive")
-  val isActive: Boolean = true,
+  val isActive: Boolean = false,
   @ServerTimestamp val createdAt: Timestamp? = null,
   @ServerTimestamp val updatedAt: Timestamp? = null,
 ) {
+  fun resolvedModerationStatus(): BusinessStatus =
+    BusinessStatus.fromString(
+      status,
+      fallback = if (isActive) BusinessStatus.APPROVED else BusinessStatus.PENDING,
+    )
+
   fun toDirectoryBusiness(distanceMeters: Float? = null): DirectoryBusiness {
     val category = DirectoryCategories.findById(categoryId)
     val locality = PatagonianLocalities.findById(localityId)
@@ -166,6 +174,7 @@ data class FirestoreBusinessListing(
       }
     val resolvedColor =
       if (markerColorArgb != 0L) markerColorArgb.toInt() else category.markerColorArgb
+    val resolvedStatus = resolvedModerationStatus()
 
     return DirectoryBusiness(
       id = id,
@@ -192,6 +201,7 @@ data class FirestoreBusinessListing(
         },
       hasDelivery = hasDelivery,
       source = resolvedSource,
+      status = resolvedStatus,
       distanceMeters = distanceMeters,
       markerColorArgb = resolvedColor,
       ownerUserId = userId.takeIf { it.isNotBlank() },
@@ -201,6 +211,9 @@ data class FirestoreBusinessListing(
   }
 
   fun toMap(ownerUid: String, isCreate: Boolean = true): Map<String, Any> {
+    val resolvedStatus =
+      if (isCreate) BusinessStatus.PENDING
+      else BusinessStatus.fromString(status, BusinessStatus.PENDING)
     val raw =
       mutableMapOf<String, Any?>(
         "userId" to ownerUid,
@@ -222,7 +235,8 @@ data class FirestoreBusinessListing(
         "hasDelivery" to hasDelivery,
         "source" to source.lowercase(),
         "markerColorArgb" to markerColorArgb,
-        "isActive" to isActive,
+        "status" to resolvedStatus.name,
+        "isActive" to (resolvedStatus == BusinessStatus.APPROVED),
         "createdAt" to if (isCreate || createdAt == null) FieldValue.serverTimestamp() else createdAt,
         "updatedAt" to FieldValue.serverTimestamp(),
       )
@@ -262,7 +276,8 @@ data class FirestoreBusinessListing(
             "user_published"
           },
         markerColorArgb = business.markerColorArgb.toLong() and 0xFFFFFFFFL,
-        isActive = true,
+        status = business.status.name,
+        isActive = business.status == BusinessStatus.APPROVED,
       )
 
     fun fromPublishedEntity(
@@ -271,6 +286,7 @@ data class FirestoreBusinessListing(
     ): FirestoreBusinessListing {
       val category = DirectoryCategories.findById(entity.categoryId)
       val locality = PatagonianLocalities.findById(entity.localityId)
+      val resolvedStatus = entity.moderationStatus
       return FirestoreBusinessListing(
         id = entity.firestoreDocId.ifBlank { if (entity.id > 0L) "local_${entity.id}" else "" },
         userId = entity.ownerUserId.ifBlank { userId },
@@ -292,7 +308,8 @@ data class FirestoreBusinessListing(
         hasDelivery = entity.hasDelivery,
         source = "user_published",
         markerColorArgb = category.markerColorArgb.toLong() and 0xFFFFFFFFL,
-        isActive = true,
+        status = resolvedStatus.name,
+        isActive = resolvedStatus == BusinessStatus.APPROVED,
       )
     }
 
@@ -376,6 +393,7 @@ data class FirestoreFavorite(
   val hasDelivery: Boolean = false,
   val source: String = "openstreetmap",
   val markerColorArgb: Long = 0xFF1546A6L,
+  val status: String = BusinessStatus.APPROVED.name,
   val ownerUserId: String? = null,
   @ServerTimestamp val createdAt: Timestamp? = null,
   @ServerTimestamp val updatedAt: Timestamp? = null,
@@ -405,6 +423,7 @@ data class FirestoreFavorite(
       description = description?.takeIf { it.isNotBlank() },
       hasDelivery = hasDelivery,
       source = resolvedSource,
+      status = BusinessStatus.fromString(status, BusinessStatus.APPROVED),
       markerColorArgb = resolvedColor,
       ownerUserId = ownerUserId?.takeIf { it.isNotBlank() },
       firestoreDocId = businessId.takeIf { it.isNotBlank() },
@@ -430,6 +449,7 @@ data class FirestoreFavorite(
         "hasDelivery" to hasDelivery,
         "source" to source.lowercase(),
         "markerColorArgb" to markerColorArgb,
+        "status" to BusinessStatus.fromString(status, BusinessStatus.APPROVED).name,
         "ownerUserId" to ownerUserId?.takeIf { it.isNotBlank() },
         "createdAt" to if (isCreate || createdAt == null) FieldValue.serverTimestamp() else createdAt,
         "updatedAt" to FieldValue.serverTimestamp(),
@@ -459,6 +479,7 @@ data class FirestoreFavorite(
         source =
           if (business.source == BusinessSource.USER_PUBLISHED) "user_published" else "openstreetmap",
         markerColorArgb = business.markerColorArgb.toLong() and 0xFFFFFFFFL,
+        status = business.status.name,
         ownerUserId = business.ownerUserId,
       )
 

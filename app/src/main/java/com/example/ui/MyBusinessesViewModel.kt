@@ -14,6 +14,7 @@ import com.example.data.remote.FirestoreBusinessListing
 import com.example.data.remote.FirestoreConfigStatus
 import com.example.data.remote.FirestoreDirectoryRepository
 import com.example.domain.model.BusinessCategory
+import com.example.domain.model.BusinessStatus
 import com.example.domain.model.DirectoryBusiness
 import com.example.domain.model.DirectoryCategories
 import com.example.domain.model.LocalityRegion
@@ -41,6 +42,7 @@ data class BusinessFormState(
   val description: String = "",
   val isOpenNow: Boolean = true,
   val hasDelivery: Boolean = false,
+  val status: BusinessStatus = BusinessStatus.PENDING,
   val isSheetOpen: Boolean = false,
   val isSaving: Boolean = false,
   val isGeocodingAddress: Boolean = false,
@@ -180,6 +182,7 @@ class MyBusinessesViewModel(
         description = entity.description,
         isOpenNow = entity.isOpenNow,
         hasDelivery = entity.hasDelivery,
+        status = entity.moderationStatus,
         isSheetOpen = true,
       )
   }
@@ -215,6 +218,7 @@ class MyBusinessesViewModel(
           description = business.description.orEmpty(),
           isOpenNow = business.isOpenNow ?: true,
           hasDelivery = business.hasDelivery,
+          status = localMatch?.moderationStatus ?: business.status,
           isSheetOpen = true,
         )
     }
@@ -304,6 +308,13 @@ class MyBusinessesViewModel(
     viewModelScope.launch {
       _formState.update { it.copy(isSaving = true, validationError = null) }
 
+      val effectiveStatus =
+        if (state.editingId == 0L && state.editingFirestoreDocId == null) {
+          BusinessStatus.PENDING
+        } else {
+          state.status
+        }
+
       val listing =
         FirestoreBusinessListing(
           id = state.editingFirestoreDocId.orEmpty(),
@@ -326,7 +337,8 @@ class MyBusinessesViewModel(
           hasDelivery = state.hasDelivery,
           source = "user_published",
           markerColorArgb = state.selectedCategory.markerColorArgb.toLong() and 0xFFFFFFFFL,
-          isActive = true,
+          status = effectiveStatus.name,
+          isActive = effectiveStatus == BusinessStatus.APPROVED,
         )
 
       var savedDocId = state.editingFirestoreDocId.orEmpty()
@@ -372,6 +384,7 @@ class MyBusinessesViewModel(
           hasDelivery = state.hasDelivery,
           ownerUserId = signedInUser.uid,
           firestoreDocId = savedDocId,
+          status = effectiveStatus.name,
         )
       )
 
@@ -379,7 +392,7 @@ class MyBusinessesViewModel(
       _feedbackMessage.value =
         when {
           cloudSynced && state.editingFirestoreDocId == null ->
-            "Comercio publicado y sincronizado en Firestore"
+            "Comercio enviado a revisión (estado pendiente) en Firestore"
           cloudSynced -> "Comercio actualizado en Firestore"
           else ->
             "Guardado solo en este dispositivo (Firebase deshabilitado: sin sincronización cloud)"

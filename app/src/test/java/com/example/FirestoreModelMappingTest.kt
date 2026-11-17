@@ -8,6 +8,7 @@ import com.example.data.remote.FirestoreFavorite
 import com.example.data.remote.FirestoreReview
 import com.example.data.remote.FirestoreUserProfile
 import com.example.domain.model.BusinessSource
+import com.example.domain.model.BusinessStatus
 import com.example.domain.model.DirectoryBusiness
 import com.example.domain.model.DirectoryCategories
 import com.example.domain.model.PatagonianLocalities
@@ -67,6 +68,8 @@ class FirestoreModelMappingTest {
     assertFalse("Map must not contain 'id'", map.containsKey("id"))
     assertEquals("uid_123", map["userId"])
     assertEquals("2994421100", map["phoneNumber"])
+    assertEquals(BusinessStatus.PENDING.name, map["status"])
+    assertEquals(false, map["isActive"])
     assertNull("Blank optional whatsapp must be filtered from Firestore map", map["whatsappNumber"])
     assertNull("Blank optional website must be filtered from Firestore map", map["websiteUri"])
     assertEquals(FieldValue.serverTimestamp(), map["createdAt"])
@@ -74,6 +77,8 @@ class FirestoreModelMappingTest {
     val updateMap = FirestoreDirectoryRepository.buildBusinessUpdateMap(listing)
     assertFalse("Update map must not mutate userId", updateMap.containsKey("userId"))
     assertFalse("Update map must not overwrite createdAt", updateMap.containsKey("createdAt"))
+    assertFalse("Update map must not mutate status", updateMap.containsKey("status"))
+    assertFalse("Update map must not mutate isActive", updateMap.containsKey("isActive"))
     assertEquals(FieldValue.serverTimestamp(), updateMap["updatedAt"])
 
     val backToDomain = listing.toDirectoryBusiness()
@@ -82,10 +87,68 @@ class FirestoreModelMappingTest {
     assertEquals("doc_ferreteria_7", backToDomain.firestoreDocId)
     assertEquals("Ferretería Confluencia", backToDomain.name)
     assertEquals(BusinessSource.USER_PUBLISHED, backToDomain.source)
+    assertEquals(BusinessStatus.PENDING, backToDomain.status)
     assertTrue(backToDomain.hasPhone)
     assertFalse(backToDomain.hasWhatsApp)
     assertEquals(-38.9516, backToDomain.latitude, 0.0001)
     assertEquals(-68.0591, backToDomain.longitude, 0.0001)
+  }
+
+  @Test
+  fun businessStatusSupportsAllFourLifecycleStatesAndClientCannotSelfApprove() {
+    assertEquals(BusinessStatus.PENDING, BusinessStatus.fromString("pending"))
+    assertEquals(BusinessStatus.APPROVED, BusinessStatus.fromString(" APPROVED "))
+    assertEquals(BusinessStatus.REJECTED, BusinessStatus.fromString("REJECTED"))
+    assertEquals(BusinessStatus.SUSPENDED, BusinessStatus.fromString("suspended"))
+    assertEquals(BusinessStatus.PENDING, BusinessStatus.fromString("unknown_value", BusinessStatus.PENDING))
+
+    assertTrue(BusinessStatus.APPROVED.isPubliclyVisible)
+    assertFalse(BusinessStatus.PENDING.isPubliclyVisible)
+    assertFalse(BusinessStatus.REJECTED.isPubliclyVisible)
+    assertFalse(BusinessStatus.SUSPENDED.isPubliclyVisible)
+
+    // Even if a client constructs a listing claiming APPROVED / isActive = true, create payload forces PENDING / false
+    val forgedCreate =
+      FirestoreBusinessListing(
+        name = "Comercio Intento Autoaprobación",
+        categoryId = "gastronomia",
+        categoryName = "Gastronomía",
+        localityId = PatagonianLocalities.NeuquenCapital.id,
+        localityName = PatagonianLocalities.NeuquenCapital.name,
+        address = "Av. Argentina 100",
+        status = BusinessStatus.APPROVED.name,
+        isActive = true,
+      )
+    val createPayload = forgedCreate.toMap(ownerUid = "uid_attacker", isCreate = true)
+    assertEquals(BusinessStatus.PENDING.name, createPayload["status"])
+    assertEquals(false, createPayload["isActive"])
+
+    // Domain mapping preserves each of the 4 moderation statuses when read from Firestore
+    BusinessStatus.entries.forEach { expectedStatus ->
+      val domain =
+        FirestoreBusinessListing(
+          id = "doc_${expectedStatus.name}",
+          userId = "uid_owner",
+          name = "Local ${expectedStatus.name}",
+          categoryId = "gastronomia",
+          categoryName = "Gastronomía",
+          localityId = PatagonianLocalities.NeuquenCapital.id,
+          localityName = PatagonianLocalities.NeuquenCapital.name,
+          address = "Mitre 200",
+          status = expectedStatus.name,
+          isActive = expectedStatus == BusinessStatus.APPROVED,
+        ).toDirectoryBusiness()
+      assertEquals(expectedStatus, domain.status)
+    }
+
+    // Legacy Firestore document missing explicit status but marked isActive = true falls back to APPROVED
+    val legacyApproved =
+      FirestoreBusinessListing(
+        id = "legacy_doc",
+        status = "",
+        isActive = true,
+      ).toDirectoryBusiness()
+    assertEquals(BusinessStatus.APPROVED, legacyApproved.status)
   }
 
   @Test
@@ -144,6 +207,7 @@ class FirestoreModelMappingTest {
     assertEquals("biz_neuquen_1", restored.id)
     assertEquals("Café del Limay", restored.name)
     assertEquals("owner_99", restored.ownerUserId)
+    assertEquals(BusinessStatus.APPROVED, restored.status)
     assertTrue(restored.hasDelivery)
   }
 

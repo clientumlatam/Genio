@@ -11,6 +11,9 @@ interface BusinessDao {
   @Query("SELECT * FROM published_businesses ORDER BY updatedAt DESC")
   fun observePublishedBusinesses(): Flow<List<PublishedBusinessEntity>>
 
+  @Query("SELECT * FROM published_businesses WHERE status = :status ORDER BY updatedAt DESC")
+  fun observePublishedBusinessesByStatus(status: String): Flow<List<PublishedBusinessEntity>>
+
   @Query("SELECT * FROM published_businesses WHERE firestoreDocId = :docId LIMIT 1")
   suspend fun findByFirestoreDocId(docId: String): PublishedBusinessEntity?
 
@@ -27,6 +30,13 @@ interface BusinessDao {
   suspend fun updateDeliveryStatus(
     id: Long,
     hasDelivery: Boolean,
+    updatedAt: Long = System.currentTimeMillis(),
+  )
+
+  @Query("UPDATE published_businesses SET status = :status, updatedAt = :updatedAt WHERE id = :id")
+  suspend fun updateModerationStatus(
+    id: Long,
+    status: String,
     updatedAt: Long = System.currentTimeMillis(),
   )
 

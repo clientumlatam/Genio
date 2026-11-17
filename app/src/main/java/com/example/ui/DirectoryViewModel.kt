@@ -18,6 +18,7 @@ import com.example.data.remote.FirestoreDirectoryRepository
 import com.example.domain.model.BusinessCategory
 import com.example.domain.model.BusinessReview
 import com.example.domain.model.BusinessSource
+import com.example.domain.model.BusinessStatus
 import com.example.domain.model.DirectoryBusiness
 import com.example.domain.model.DirectoryCategories
 import com.example.domain.model.DirectoryFilters
@@ -134,7 +135,7 @@ class DirectoryViewModel(
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), null)
 
   private val firestoreBusinesses: Flow<List<DirectoryBusiness>> =
-    firestoreRepository?.observeActiveBusinesses() ?: flowOf(emptyList())
+    firestoreRepository?.observeApprovedBusinesses() ?: flowOf(emptyList())
 
   val favoriteBusinesses: StateFlow<List<DirectoryBusiness>> =
     currentUser
@@ -548,33 +549,37 @@ class DirectoryViewModel(
     val refCenter = customMapCenter ?: control.selectedLocality.latLng
     val queryLower = control.searchQuery.trim().lowercase()
 
-    // Combinar comercios de Firestore y registros locales evitando duplicados por ID/firestoreDocId
+    // Combinar únicamente comercios aprobados (status == APPROVED) evitando duplicados por ID/firestoreDocId
     val mergedUserBusinesses = LinkedHashMap<String, DirectoryBusiness>()
-    cloudBusinesses.forEach { biz ->
-      val dist = FloatArray(1)
-      Location.distanceBetween(
-        refCenter.latitude,
-        refCenter.longitude,
-        biz.latitude,
-        biz.longitude,
-        dist,
-      )
-      mergedUserBusinesses[biz.id] = biz.copy(distanceMeters = dist[0])
-    }
-    publishedEntities.forEach { entity ->
-      val key = entity.firestoreDocId.ifBlank { "local_${entity.id}" }
-      if (!mergedUserBusinesses.containsKey(key)) {
+    cloudBusinesses
+      .filter { it.status == BusinessStatus.APPROVED }
+      .forEach { biz ->
         val dist = FloatArray(1)
         Location.distanceBetween(
           refCenter.latitude,
           refCenter.longitude,
-          entity.latitude,
-          entity.longitude,
+          biz.latitude,
+          biz.longitude,
           dist,
         )
-        mergedUserBusinesses[key] = entity.toDirectoryBusiness(distanceMeters = dist[0])
+        mergedUserBusinesses[biz.id] = biz.copy(distanceMeters = dist[0])
       }
-    }
+    publishedEntities
+      .filter { it.moderationStatus == BusinessStatus.APPROVED }
+      .forEach { entity ->
+        val key = entity.firestoreDocId.ifBlank { "local_${entity.id}" }
+        if (!mergedUserBusinesses.containsKey(key)) {
+          val dist = FloatArray(1)
+          Location.distanceBetween(
+            refCenter.latitude,
+            refCenter.longitude,
+            entity.latitude,
+            entity.longitude,
+            dist,
+          )
+          mergedUserBusinesses[key] = entity.toDirectoryBusiness(distanceMeters = dist[0])
+        }
+      }
 
     val filteredUserPublished =
       mergedUserBusinesses.values.filter { business ->
@@ -644,7 +649,9 @@ class DirectoryViewModel(
       longitude = longitude,
       phoneNumber = phone,
       whatsappNumber = whatsapp,
+      hasDelivery = false,
       source = BusinessSource.OPENSTREETMAP,
+      status = BusinessStatus.fromString(status, BusinessStatus.APPROVED),
       markerColorArgb = matchedCategory.markerColorArgb,
     )
   }

@@ -24,11 +24,16 @@
         "hasDelivery": { "type": "boolean" },
         "source": { "type": "string" },
         "markerColorArgb": { "type": "integer" },
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "APPROVED", "REJECTED", "SUSPENDED"],
+          "description": "Moderation lifecycle status of the business listing."
+        },
         "isActive": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["userId", "name", "categoryId", "localityId", "address", "latitude", "longitude", "isActive", "createdAt", "updatedAt"]
+      "required": ["userId", "name", "categoryId", "localityId", "address", "latitude", "longitude", "status", "isActive", "createdAt", "updatedAt"]
     },
     "Review": {
       "title": "Review",
@@ -66,6 +71,7 @@
         "hasDelivery": { "type": "boolean" },
         "source": { "type": "string" },
         "markerColorArgb": { "type": "integer" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED", "SUSPENDED"] },
         "ownerUserId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }

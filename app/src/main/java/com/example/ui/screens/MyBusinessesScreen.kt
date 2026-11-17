@@ -77,6 +77,7 @@ import com.example.domain.model.DirectoryBusiness
 import com.example.domain.model.DirectoryCategories
 import com.example.domain.model.LocalityRegion
 import com.example.domain.model.PatagonianLocalities
+import com.example.ui.components.BusinessModerationStatusPill
 import com.example.ui.components.StatusPill
 
 @Composable
@@ -626,6 +627,8 @@ private fun PublishedBusinessManageCard(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
+          Spacer(modifier = Modifier.height(6.dp))
+          BusinessModerationStatusPill(status = entity.moderationStatus)
         }
         IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
           Icon(

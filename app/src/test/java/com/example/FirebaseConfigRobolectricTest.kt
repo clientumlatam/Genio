@@ -12,6 +12,7 @@ import com.example.data.remote.FirebaseConfigurationService
 import com.example.data.remote.FirestoreBusinessListing
 import com.example.data.remote.FirestoreConfigStatus
 import com.example.data.remote.FirestoreDirectoryRepository
+import com.example.domain.model.BusinessStatus
 import com.example.domain.model.DirectoryBusiness
 import com.example.domain.model.PatagonianLocalities
 import com.example.ui.DirectoryViewModel
@@ -327,5 +328,31 @@ class FirebaseConfigRobolectricTest {
     assertFalse(signedOutState.isAuthenticatedFirestoreReady)
     assertNull(signedOutState.authenticatedUserId)
     configService.release()
+  }
+
+  @Test
+  fun `publicBusinessesQuery filters exclusively by status equals APPROVED`() {
+    FirebaseApp.initializeApp(
+      context,
+      FirebaseOptions.Builder()
+        .setProjectId("guia-genio-prod")
+        .setApplicationId("1:123456:android:abcdef")
+        .setApiKey("AIzaSyTestOnlyNotARealKey123")
+        .build(),
+    )
+
+    val resolution =
+      FirestoreDirectoryRepository.resolveNamedFirestoreWithStatus(
+        context = context,
+        databaseIdOverride = "guia-genio-db",
+      )
+    val db = resolution.firestore!!
+
+    assertEquals("status", FirestoreDirectoryRepository.FIELD_STATUS)
+    assertEquals(BusinessStatus.APPROVED.name, FirestoreDirectoryRepository.PUBLIC_VISIBLE_STATUS)
+
+    val expectedQuery = db.collection("businesses").whereEqualTo("status", "APPROVED")
+    val actualQuery = FirestoreDirectoryRepository.publicBusinessesQuery(db)
+    assertEquals(expectedQuery, actualQuery)
   }
 }

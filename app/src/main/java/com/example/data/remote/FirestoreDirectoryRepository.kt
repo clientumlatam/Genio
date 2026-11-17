@@ -3,6 +3,7 @@ package com.example.data.remote
 import android.content.Context
 import android.util.Log
 import com.example.domain.model.BusinessReview
+import com.example.domain.model.BusinessStatus
 import com.example.domain.model.DirectoryBusiness
 import com.example.domain.model.PatagonianLocalities
 import com.google.firebase.Firebase
@@ -117,16 +118,15 @@ class FirestoreDirectoryRepository internal constructor(
   }
 
   /**
-   * Observa en tiempo real los comercios activos publicados en Firestore.
+   * Observa en tiempo real los comercios públicos aprobados (`status == 'APPROVED'`) en Firestore.
    * Si Firebase aún no está provisionado, emite lista vacía sin simular error de red.
    */
-  fun observeActiveBusinesses(): Flow<List<DirectoryBusiness>> {
+  fun observeApprovedBusinesses(): Flow<List<DirectoryBusiness>> {
     val db = activePublicFirestore() ?: return flowOf(emptyList())
     val path = FirestoreCollections.BUSINESSES
     return callbackFlow {
       val registration =
-        db.collection(path)
-          .whereEqualTo("isActive", true)
+        publicBusinessesQuery(db)
           .addSnapshotListener { snapshot, error ->
             if (error != null) {
               handleFirestoreError(error, OperationType.LIST, path)
@@ -136,7 +136,9 @@ class FirestoreDirectoryRepository internal constructor(
             val list =
               snapshot?.documents
                 ?.mapNotNull { doc ->
-                  FirestoreBusinessListing.fromSnapshot(doc)?.toDirectoryBusiness()
+                  FirestoreBusinessListing.fromSnapshot(doc)
+                    ?.toDirectoryBusiness()
+                    ?.takeIf { it.status == BusinessStatus.APPROVED }
                 }
                 .orEmpty()
             trySend(list)
@@ -150,8 +152,13 @@ class FirestoreDirectoryRepository internal constructor(
   }
 
   /**
+   * Alias de compatibilidad para el directorio público aprobado (`status == 'APPROVED'`).
+   */
+  fun observeActiveBusinesses(): Flow<List<DirectoryBusiness>> = observeApprovedBusinesses()
+
+  /**
    * Crea o actualiza un comercio en Firestore vinculado al UID del dueño autenticado.
-   * Devuelve el ID del documento Firestore guardado.
+   * Las altas nuevas siempre inician con `status = PENDING` y el cliente no puede modificar `status`.
    */
   suspend fun saveBusiness(
     listing: FirestoreBusinessListing,
@@ -174,7 +181,8 @@ class FirestoreDirectoryRepository internal constructor(
 
       if (existingDocId.isNullOrBlank()) {
         val docRef = db.collection(FirestoreCollections.BUSINESSES).document()
-        val payload = listing.toMap(ownerUid = uid, isCreate = true)
+        val pendingListing = listing.copy(status = BusinessStatus.PENDING.name, isActive = false)
+        val payload = pendingListing.toMap(ownerUid = uid, isCreate = true)
         docRef.set(payload).await()
         Result.success(docRef.id)
       } else {
@@ -416,6 +424,12 @@ class FirestoreDirectoryRepository internal constructor(
 
   companion object {
     private const val TAG = "FirestoreDirectoryRepo"
+    const val FIELD_STATUS = "status"
+    val PUBLIC_VISIBLE_STATUS: String = BusinessStatus.APPROVED.name
+
+    fun publicBusinessesQuery(db: FirebaseFirestore): Query =
+      db.collection(FirestoreCollections.BUSINESSES)
+        .whereEqualTo(FIELD_STATUS, PUBLIC_VISIBLE_STATUS)
 
     fun sanitizeDocId(rawId: String): String =
       rawId.trim().replace("/", "_").replace(" ", "_").take(150)
@@ -439,7 +453,6 @@ class FirestoreDirectoryRepository internal constructor(
           "isOpenNow" to listing.isOpenNow,
           "hasDelivery" to listing.hasDelivery,
           "markerColorArgb" to listing.markerColorArgb,
-          "isActive" to listing.isActive,
           "updatedAt" to FieldValue.serverTimestamp(),
         )
       @Suppress("UNCHECKED_CAST")

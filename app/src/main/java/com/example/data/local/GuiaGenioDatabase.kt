@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     FavoriteBusinessEntity::class,
     OsmCacheEntity::class,
   ],
-  version = 3,
+  version = 4,
   exportSchema = false,
 )
 abstract class GuiaGenioDatabase : RoomDatabase() {
@@ -22,7 +22,7 @@ abstract class GuiaGenioDatabase : RoomDatabase() {
   companion object {
     @Volatile private var INSTANCE: GuiaGenioDatabase? = null
 
-    private val MIGRATION_1_2 =
+    internal val MIGRATION_1_2 =
       object : Migration(1, 2) {
         override fun migrate(db: SupportSQLiteDatabase) {
           db.execSQL(
@@ -38,7 +38,7 @@ abstract class GuiaGenioDatabase : RoomDatabase() {
         }
       }
 
-    private val MIGRATION_2_3 =
+    internal val MIGRATION_2_3 =
       object : Migration(2, 3) {
         override fun migrate(db: SupportSQLiteDatabase) {
           db.execSQL(
@@ -53,6 +53,18 @@ abstract class GuiaGenioDatabase : RoomDatabase() {
         }
       }
 
+    internal val MIGRATION_3_4 =
+      object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+          db.execSQL(
+            "ALTER TABLE `published_businesses` ADD COLUMN `status` TEXT NOT NULL DEFAULT 'PENDING'"
+          )
+          db.execSQL(
+            "ALTER TABLE `favorite_businesses` ADD COLUMN `status` TEXT NOT NULL DEFAULT 'APPROVED'"
+          )
+        }
+      }
+
     fun getInstance(context: Context): GuiaGenioDatabase {
       return INSTANCE
         ?: synchronized(this) {
@@ -62,7 +74,7 @@ abstract class GuiaGenioDatabase : RoomDatabase() {
                 GuiaGenioDatabase::class.java,
                 "guia_genio.db",
               )
-              .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+              .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
               .fallbackToDestructiveMigration(dropAllTables = true)
               .build()
               .also { INSTANCE = it }

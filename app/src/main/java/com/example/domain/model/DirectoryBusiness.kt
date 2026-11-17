@@ -5,6 +5,23 @@ enum class BusinessSource {
   USER_PUBLISHED,
 }
 
+enum class BusinessStatus {
+  PENDING,
+  APPROVED,
+  REJECTED,
+  SUSPENDED;
+
+  val isPubliclyVisible: Boolean
+    get() = this == APPROVED
+
+  companion object {
+    fun fromString(raw: String?, fallback: BusinessStatus = PENDING): BusinessStatus {
+      val normalized = raw?.trim()?.uppercase()
+      return entries.firstOrNull { it.name == normalized } ?: fallback
+    }
+  }
+}
+
 data class DirectoryBusiness(
   val id: String,
   val name: String,
@@ -23,6 +40,7 @@ data class DirectoryBusiness(
   val openingHoursSummary: List<String> = emptyList(),
   val hasDelivery: Boolean = false,
   val source: BusinessSource = BusinessSource.OPENSTREETMAP,
+  val status: BusinessStatus = BusinessStatus.APPROVED,
   val distanceMeters: Float? = null,
   val markerColorArgb: Int = 0xFF1546A6.toInt(),
   val ownerUserId: String? = null,

@@ -7,6 +7,7 @@ import com.example.data.local.GuiaGenioDatabase
 import com.example.data.local.OsmCacheEntity
 import com.example.domain.model.BusinessCategory
 import com.example.domain.model.BusinessSource
+import com.example.domain.model.BusinessStatus
 import com.example.domain.model.DirectoryBusiness
 import com.example.domain.model.DirectoryCategories
 import com.example.domain.model.GeoPointCoord
@@ -479,6 +480,7 @@ class PlacesRepository(
             .put("description", b.description ?: "")
             .put("openingHoursRaw", b.openingHoursRaw ?: "")
             .put("hasDelivery", b.hasDelivery)
+            .put("status", b.status.name)
             .put("markerColorArgb", b.markerColorArgb)
         array.put(obj)
       }
@@ -525,6 +527,7 @@ class PlacesRepository(
             openingHoursSummary = listOfNotNull(hoursRaw),
             hasDelivery = obj.optBoolean("hasDelivery", false),
             source = BusinessSource.OPENSTREETMAP,
+            status = BusinessStatus.fromString(obj.optString("status"), BusinessStatus.APPROVED),
             distanceMeters = dist[0],
             markerColorArgb = obj.optInt("markerColorArgb", 0xFF1546A6.toInt()),
           )

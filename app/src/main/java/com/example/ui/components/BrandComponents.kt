@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.domain.model.BusinessSource
+import com.example.domain.model.BusinessStatus
 import com.example.domain.model.DirectoryBusiness
 import com.example.domain.model.DirectoryCategories
 import com.example.domain.model.LocalityRegion
@@ -556,6 +557,47 @@ fun StatusPill(
       modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
     )
   }
+}
+
+@Composable
+fun BusinessModerationStatusPill(
+  status: BusinessStatus,
+  modifier: Modifier = Modifier,
+) {
+  val (label, containerColor, contentColor) =
+    when (status) {
+      BusinessStatus.APPROVED ->
+        Triple(
+          stringResource(R.string.status_approved),
+          MaterialTheme.colorScheme.tertiaryContainer,
+          MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+      BusinessStatus.PENDING ->
+        Triple(
+          stringResource(R.string.status_pending),
+          MaterialTheme.colorScheme.secondaryContainer,
+          MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+      BusinessStatus.REJECTED ->
+        Triple(
+          stringResource(R.string.status_rejected),
+          MaterialTheme.colorScheme.errorContainer,
+          MaterialTheme.colorScheme.onErrorContainer,
+        )
+      BusinessStatus.SUSPENDED ->
+        Triple(
+          stringResource(R.string.status_suspended),
+          MaterialTheme.colorScheme.surfaceVariant,
+          MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+  StatusPill(
+    text = label,
+    containerColor = containerColor,
+    contentColor = contentColor,
+    modifier = modifier.testTag("moderation_status_pill_${status.name.lowercase()}"),
+  )
 }
 
 @Composable

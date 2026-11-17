@@ -291,6 +291,7 @@ fun BusinessDetailSheet(
         }
 
         if (business.source == BusinessSource.USER_PUBLISHED) {
+          BusinessModerationStatusPill(status = business.status)
           Surface(
             shape = RoundedCornerShape(50),
             color = MaterialTheme.colorScheme.primaryContainer,

@@ -2,18 +2,26 @@ package com.example
 
 import android.content.Context
 import androidx.room.Room
+import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteOpenHelper
+import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.GuiaGenioDatabase
 import com.example.data.local.OsmCacheEntity
 import com.example.data.local.PublishedBusinessEntity
 import com.example.data.local.PublishedBusinessRepository
+import com.example.data.places.LocationTracker
 import com.example.data.places.PlacesRepository
 import com.example.domain.model.BusinessSource
+import com.example.domain.model.BusinessStatus
 import com.example.domain.model.DirectoryCategories
+import com.example.domain.model.DirectoryResultsState
 import com.example.domain.model.GeoPointCoord
 import com.example.domain.model.PatagonianLocalities
+import com.example.ui.DirectoryViewModel
 import java.util.Calendar
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.junit.After
@@ -268,5 +276,184 @@ class DirectoryLogicRobolectricTest {
         DirectoryCategories.AllCategory,
       )
     assertEquals("vaca_muerta_industria", osmCat.id)
+  }
+
+  @Test
+  fun `Room filters approved businesses while keeping all moderation states for owner`() = runBlocking {
+    BusinessStatus.entries.forEach { status ->
+      repository.saveBusiness(
+        PublishedBusinessEntity(
+          name = "Comercio ${status.name}",
+          categoryId = "gastronomia",
+          localityId = PatagonianLocalities.NeuquenCapital.id,
+          address = "Av. Argentina 50",
+          latitude = PatagonianLocalities.NeuquenCapital.latitude,
+          longitude = PatagonianLocalities.NeuquenCapital.longitude,
+          phone = "2994000001",
+          whatsapp = "",
+          website = "",
+          description = "Prueba estado ${status.name}",
+          isOpenNow = true,
+          hasDelivery = false,
+          status = status.name,
+          ownerUserId = "owner_1",
+          firestoreDocId = "doc_${status.name}",
+        )
+      )
+    }
+
+    val allOwnerItems = repository.publishedBusinesses.first()
+    assertEquals(4, allOwnerItems.size)
+
+    val publiclyApproved = repository.approvedPublishedBusinesses.first()
+    assertEquals(1, publiclyApproved.size)
+    assertEquals(BusinessStatus.APPROVED, publiclyApproved.first().moderationStatus)
+    assertEquals("Comercio APPROVED", publiclyApproved.first().name)
+  }
+
+  @Test
+  fun `DirectoryViewModel public results exclude PENDING REJECTED and SUSPENDED businesses`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val dao = database.businessDao()
+    // Seed empty OSM cache so PlacesRepository resolves immediately offline without hitting network
+    dao.upsertCachedSearch(
+      OsmCacheEntity(
+        cacheKey = "-38.952_-68.059_all__false",
+        payloadJson = "[]",
+        cachedAtMillis = System.currentTimeMillis(),
+      )
+    )
+
+    BusinessStatus.entries.forEach { status ->
+      repository.saveBusiness(
+        PublishedBusinessEntity(
+          name = "Público ${status.name}",
+          categoryId = "gastronomia",
+          localityId = PatagonianLocalities.NeuquenCapital.id,
+          address = "Mitre 150",
+          latitude = PatagonianLocalities.NeuquenCapital.latitude,
+          longitude = PatagonianLocalities.NeuquenCapital.longitude,
+          phone = "2994420000",
+          whatsapp = "",
+          website = "",
+          description = "Estado ${status.name}",
+          isOpenNow = true,
+          hasDelivery = false,
+          status = status.name,
+          ownerUserId = "owner_2",
+          firestoreDocId = "doc_pub_${status.name}",
+        )
+      )
+    }
+
+    val vm =
+      DirectoryViewModel(
+        placesRepository = PlacesRepository(context, businessDao = dao),
+        publishedRepository = repository,
+        locationTracker = LocationTracker(context),
+        firestoreRepository = null,
+        authService = null,
+      )
+    vm.toggleUserPublishedFilter()
+
+    val successState =
+      vm.resultsState.firstOrNull { state ->
+        state is DirectoryResultsState.Success && state.businesses.isNotEmpty()
+      } as? DirectoryResultsState.Success
+
+    assertNotNull(successState)
+    assertEquals(1, successState!!.businesses.size)
+    assertEquals("Público APPROVED", successState.businesses.first().name)
+    assertEquals(BusinessStatus.APPROVED, successState.businesses.first().status)
+  }
+
+  @Test
+  fun `Room MIGRATION_3_4 adds status column safely to published and favorite tables`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val dbName = "migration_3_4_test.db"
+    context.deleteDatabase(dbName)
+    val callback =
+      object : SupportSQLiteOpenHelper.Callback(3) {
+        override fun onCreate(db: SupportSQLiteDatabase) {
+          db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `published_businesses` (
+              `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+              `name` TEXT NOT NULL,
+              `categoryId` TEXT NOT NULL,
+              `localityId` TEXT NOT NULL,
+              `address` TEXT NOT NULL,
+              `latitude` REAL NOT NULL,
+              `longitude` REAL NOT NULL,
+              `phone` TEXT NOT NULL,
+              `whatsapp` TEXT NOT NULL,
+              `website` TEXT NOT NULL,
+              `description` TEXT NOT NULL,
+              `isOpenNow` INTEGER NOT NULL,
+              `hasDelivery` INTEGER NOT NULL,
+              `ownerUserId` TEXT NOT NULL DEFAULT '',
+              `firestoreDocId` TEXT NOT NULL DEFAULT '',
+              `createdAtMillis` INTEGER NOT NULL DEFAULT 0,
+              `updatedAt` INTEGER NOT NULL
+            )
+            """.trimIndent()
+          )
+          db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `favorite_businesses` (
+              `businessId` TEXT NOT NULL PRIMARY KEY,
+              `name` TEXT NOT NULL,
+              `categoryName` TEXT NOT NULL,
+              `localityName` TEXT NOT NULL,
+              `address` TEXT NOT NULL,
+              `phone` TEXT,
+              `whatsapp` TEXT,
+              `latitude` REAL NOT NULL,
+              `longitude` REAL NOT NULL,
+              `savedAt` INTEGER NOT NULL
+            )
+            """.trimIndent()
+          )
+        }
+
+        override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+      }
+
+    val helper =
+      FrameworkSQLiteOpenHelperFactory().create(
+        SupportSQLiteOpenHelper.Configuration.builder(context)
+          .name(dbName)
+          .callback(callback)
+          .build()
+      )
+    val sqliteDb = helper.writableDatabase
+    sqliteDb.execSQL(
+      """
+      INSERT INTO `published_businesses`
+      (`name`,`categoryId`,`localityId`,`address`,`latitude`,`longitude`,`phone`,`whatsapp`,`website`,`description`,`isOpenNow`,`hasDelivery`,`ownerUserId`,`firestoreDocId`,`createdAtMillis`,`updatedAt`)
+      VALUES ('Legacy Local','gastronomia','neuquen_capital','Roca 10',-38.95,-68.05,'','','','',1,0,'uid_1','doc_1',100,200)
+      """.trimIndent()
+    )
+    sqliteDb.execSQL(
+      """
+      INSERT INTO `favorite_businesses`
+      (`businessId`,`name`,`categoryName`,`localityName`,`address`,`phone`,`whatsapp`,`latitude`,`longitude`,`savedAt`)
+      VALUES ('fav_1','Fav Local','Gastronomía','Neuquén Capital','Roca 11',NULL,NULL,-38.95,-68.05,200)
+      """.trimIndent()
+    )
+
+    GuiaGenioDatabase.MIGRATION_3_4.migrate(sqliteDb)
+
+    sqliteDb.query("SELECT `status` FROM `published_businesses`").use { cursor ->
+      assertTrue(cursor.moveToFirst())
+      assertEquals(BusinessStatus.PENDING.name, cursor.getString(0))
+    }
+    sqliteDb.query("SELECT `status` FROM `favorite_businesses`").use { cursor ->
+      assertTrue(cursor.moveToFirst())
+      assertEquals(BusinessStatus.APPROVED.name, cursor.getString(0))
+    }
+
+    helper.close()
+    context.deleteDatabase(dbName)
   }
 }
