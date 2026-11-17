@@ -86,6 +86,7 @@ import com.example.ui.screens.ExploreScreen
 import com.example.ui.screens.FavoritesScreen
 import com.example.ui.screens.MapScreen
 import com.example.ui.screens.MyBusinessesScreen
+import com.example.ui.screens.ensureOsmConfigured
 import com.example.ui.theme.GuiaGenioTheme
 import kotlinx.coroutines.launch
 
@@ -129,6 +130,9 @@ class MainActivity : ComponentActivity() {
     firebaseConfigService = FirebaseConfigurationService(appContext)
     val firestoreRepository = FirestoreDirectoryRepository(firebaseConfigService)
     authService = AuthService(appContext, firebaseConfigService)
+
+    // Inicialización global de osmdroid en MainActivity
+    ensureOsmConfigured(appContext)
 
     lifecycleScope.launch {
       authService.attemptAutoSignIn(this@MainActivity)

@@ -94,6 +94,7 @@ import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent
 import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
@@ -724,6 +725,22 @@ fun DirectoryMapCanvas(
     }
   }
 }
+
+internal val CARTO_VOYAGER_TILE_SOURCE =
+  XYTileSource(
+    "CartoVoyager",
+    0,
+    19,
+    256,
+    ".png",
+    arrayOf(
+      "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
+      "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
+      "https://c.basemaps.cartocdn.com/rastertiles/voyager/",
+      "https://d.basemaps.cartocdn.com/rastertiles/voyager/",
+    ),
+    "© OpenStreetMap contributors, © CARTO",
+  )
 
 internal fun ensureOsmConfigured(context: Context) {
   val appCtx = context.applicationContext
